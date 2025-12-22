@@ -111,7 +111,8 @@ describe('Motoko formatter', () => {
 
     test('do ? / optional', async () => {
         expect(await format('?{}')).toStrictEqual('?{}\n');
-        // expect(await format('do?{}')).toStrictEqual('do ? {}\n');
+        await expectFormatted('do ? {}\n');
+        expect(await format('do?{}')).toStrictEqual('do ? {}\n');
     });
 
     test('anonymous functions', async () => {
@@ -572,16 +573,16 @@ public type T = {
         await expectFormatted('a ?? b ?? c\n');
         await expectFormatted('a\n?? b;\n');
         await expectFormatted('(\n  a\n  ?? b\n);\n');
-        
+
         await expectFormatted('?a\n');
         await expectFormatted('??a\n');
-        // expect(await format('? ?a')).toStrictEqual('??a\n');
+        expect(await format('? ?a')).toStrictEqual('??a\n');
         await expectFormatted('a ?? ?b\n');
         await expectFormatted('?a ?? b\n');
         await expectFormatted('?a ?? ?b\n');
         await expectFormatted('??a ?? b\n');
         await expectFormatted('a ?? ??b\n');
-        
+
         await expectFormatted('(a) ?? b\n');
         await expectFormatted('a ?? (b)\n');
         await expectFormatted('(a) ?? (b)\n');
@@ -640,7 +641,7 @@ public type T = {
 
     test('optional variants', async () => {
         await expectFormatted('?#abc\n');
-        // expect(await format('? #abc')).toEqual('?#abc\n');
+        expect(await format('? #abc')).toEqual('?#abc\n');
     });
 
     test('parenthesized `with` expression prefixes', async () => {
