@@ -170,7 +170,11 @@ const spaceConfig: SpaceConfig = {
         // prefix/postfix operators
         [{ left: tokenEquals('do'), main: tokenEquals('?') }, '_', 'space'],
         // [tokenEquals('?'), 'Curly', 'keep'],
-        [tokenEquals('?'), '_', 'nil'],
+
+        // optional syntax and null coalesce operator
+        ['_', tokenEquals('?'), 'keep'],
+        [tokenEquals('?'), '_', 'keep'],
+
         ['_', tokenEquals('!'), 'nil'],
 
         // tags and concatenation
