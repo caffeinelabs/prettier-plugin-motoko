@@ -704,8 +704,11 @@ public type T = {
         expect(await format('{\n\n1;\n2;\n\n3;\n\n}\n', options)).toEqual(
             '{\n  1;\n  2;\n\n  3;\n};\n',
         );
-        expect(await format('actor {\n\nfunc f() {\n\nlet a = 0;\n\n}\n\n}\n', options)).toEqual(
-            'actor {\n  func f() {\n    let a = 0;\n  };\n};\n',
-        );
+        expect(
+            await format(
+                'actor {\n\nfunc f() {\n\nlet a = 0;\n\n}\n\n}\n',
+                options,
+            ),
+        ).toEqual('actor {\n  func f() {\n    let a = 0;\n  };\n};\n');
     });
 });
