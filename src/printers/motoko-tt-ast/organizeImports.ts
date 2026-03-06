@@ -327,7 +327,7 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
             return tree;
         }
 
-        // Validate preservation
+        // Validate that all original imports are preserved in the organized version
         const organizedImports = extractImports(organizedTree);
         if (!validateImportsPreserved(imports, organizedImports)) {
             console.warn('Import data changed. Preserving original.');
