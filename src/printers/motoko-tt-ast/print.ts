@@ -11,7 +11,7 @@ import {
     getTokenTreeText,
     withoutLineBreaks,
 } from './utils';
-import { transformTreeWithOrganizedImports } from './organizeImports';
+import { transformOrganizeImports } from './organizeImports';
 
 export type Space =
     | (
@@ -119,7 +119,7 @@ export default function print(
     
     // Organize imports if option is enabled
     if ((options as any).motokoOrganizeImports && tree.token_tree_type === 'Group') {
-        tree = transformTreeWithOrganizedImports(tree);
+        tree = transformOrganizeImports(tree);
     }
     
     const doc = printTokenTree(tree, path, options, print, args);
