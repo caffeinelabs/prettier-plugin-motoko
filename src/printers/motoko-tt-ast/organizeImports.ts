@@ -16,21 +16,21 @@ const WHITESPACE_TYPES = [
     'BlockComment',
 ];
 
-const isWhitespace = (tree: TokenTree): boolean => {
+function isWhitespace(tree: TokenTree): boolean {
     const token = getToken(tree);
     return !!token && WHITESPACE_TYPES.includes(token.token_type);
-};
+}
 
-const skipWhitespace = (trees: TokenTree[], start: number): number => {
+function skipWhitespace(trees: TokenTree[], start: number): number {
     let i = start;
     while (i < trees.length && isWhitespace(trees[i])) i++;
     return i;
-};
+}
 
-const isImportKeyword = (tree: TokenTree): boolean => {
+function isImportKeyword(tree: TokenTree): boolean {
     const token = getToken(tree);
     return !!token && token.token_type === 'Ident' && token.data === 'import';
-};
+}
 
 function extractImports(tree: TokenTree): ImportStatement[] {
     if (tree.token_tree_type !== 'Group') return [];
