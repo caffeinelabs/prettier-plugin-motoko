@@ -73,6 +73,7 @@ Automatically organize and sort import statements. When enabled, imports are:
 - Sorted alphabetically within each group
 - Combined when importing from the same path
 - Separated by blank lines between groups
+- Comments within the import section are preserved and moved below the organized imports
 
 Example:
 

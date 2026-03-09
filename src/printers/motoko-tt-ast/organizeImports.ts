@@ -1,5 +1,6 @@
+import wasm from '../../wasm';
 import { Token, TokenTree } from '../../parsers/motoko-tt-parse/parse';
-import { getToken } from './utils';
+import { getToken, getTokenText, getTokenTreeText } from './utils';
 
 interface ImportStatement {
     name?: string;
@@ -279,6 +280,30 @@ function validateImportsPreserved(
     return true;
 }
 
+function collectComments(
+    trees: TokenTree[],
+    start: number,
+    end: number,
+): string[] {
+    const comments: string[] = [];
+    for (let i = start; i <= end && i < trees.length; i++) {
+        const token = getToken(trees[i]);
+        if (
+            token &&
+            (token.token_type === 'LineComment' ||
+                token.token_type === 'BlockComment')
+        ) {
+            comments.push(getTokenText(token));
+        } else if (
+            trees[i].token_tree_type === 'Group' &&
+            trees[i].data[1] === 'Comment'
+        ) {
+            comments.push(getTokenTreeText(trees[i]));
+        }
+    }
+    return comments;
+}
+
 export function transformOrganizeImports(tree: TokenTree): TokenTree {
     if (tree.token_tree_type !== 'Group') return tree;
     const [trees, groupType, pair] = tree.data;
@@ -308,10 +333,7 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
         const organizedText = organizeImports(imports);
         if (!organizedText.trim()) return tree;
 
-        // Parse organized imports back
-        const wasm = require('../../wasm').default;
         const organizedTree = wasm.parse_token_tree(organizedText.trim());
-
         if (organizedTree.token_tree_type !== 'Group') {
             console.warn(
                 'Failed to parse organized imports. Preserving original.',
@@ -334,11 +356,29 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
             return tree;
         }
 
+        // Collect comments from the import range and trailing whitespace
+        const nextNonWs = skipWhitespace(trees, end + 1);
+        const comments = collectComments(trees, start, nextNonWs - 1);
+
+        // Build final trees, preserving comments after organized imports
+        let finalTrees: TokenTree[];
+        if (comments.length > 0) {
+            const finalText =
+                organizedText.trim() + '\n\n' + comments.join('\n');
+            const finalTree = wasm.parse_token_tree(finalText);
+            if (finalTree.token_tree_type === 'Group') {
+                finalTrees = finalTree.data[0];
+            } else {
+                finalTrees = organizedTrees;
+            }
+        } else {
+            finalTrees = organizedTrees;
+        }
+
         // Build new tree
-        const newTrees = [...trees.slice(0, start), ...organizedTrees];
+        const newTrees = [...trees.slice(0, start), ...finalTrees];
 
         // Add spacing if there's content after imports
-        const nextNonWs = skipWhitespace(trees, end + 1);
         if (nextNonWs < trees.length) {
             newTrees.push({
                 token_tree_type: 'Token',

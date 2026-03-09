@@ -164,6 +164,9 @@ actor {}`;
         const expected = `import Array "mo:base/Array";
 import Text "mo:base/Text";
 
+// Array utilities
+// Text utilities
+
 actor {};\n`;
         expect(await format(input, organizeImportsOptions)).toEqual(expected);
     });
@@ -177,6 +180,26 @@ actor {}`;
         const expected = `/* Core imports */
 import Array "mo:base/Array";
 import Text "mo:base/Text";
+
+actor {};\n`;
+        expect(await format(input, organizeImportsOptions)).toEqual(expected);
+    });
+
+    test('comments between imports are preserved', async () => {
+        const input = `// Base library imports
+import Text "mo:base/Text";
+// Utility imports
+import Utils "./utils";
+import Array "mo:base/Array";
+
+actor {}`;
+        const expected = `// Base library imports
+import Array "mo:base/Array";
+import Text "mo:base/Text";
+
+import Utils "./utils";
+
+// Utility imports
 
 actor {};\n`;
         expect(await format(input, organizeImportsOptions)).toEqual(expected);
@@ -303,6 +326,8 @@ actor {
 }`;
         const expected = `import Array "mo:base/Array";
 import Text "mo:base/Text";
+
+// Main actor
 
 actor {
   public func test() {};

@@ -1,6 +1,6 @@
 {
     "name": "mo-fmt",
-    "version": "0.12.5",
+    "version": "0.13.0",
     "description": "A standalone Motoko formatter CLI.",
     "main": "src/cli.js",
     "bin": {

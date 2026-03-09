@@ -116,12 +116,12 @@ export default function print(
     if (tree === null) {
         return '';
     }
-    
+
     // Organize imports if option is enabled
-    if ((options as any).motokoOrganizeImports && tree.token_tree_type === 'Group') {
+    if (options.motokoOrganizeImports && tree.token_tree_type === 'Group') {
         tree = transformOrganizeImports(tree);
     }
-    
+
     const doc = printTokenTree(tree, path, options, print, args);
     return doc || (Array.isArray(doc) && doc.length)
         ? [doc, literallineWithoutBreakParent]
