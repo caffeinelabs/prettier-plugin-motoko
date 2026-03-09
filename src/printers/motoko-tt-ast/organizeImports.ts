@@ -246,35 +246,19 @@ function validateImportsPreserved(
         if (orig.names.size === 0 && orig.fields.size === 0) continue;
 
         const org = orgMap.get(path);
-        if (!org) {
-            console.warn(`Path ${path} missing after organizing`);
-            return false;
-        }
+        if (!org) return false;
 
         for (const name of orig.names) {
-            if (!org.names.has(name)) {
-                console.warn(
-                    `Name "${name}" for path ${path} missing after organizing`,
-                );
-                return false;
-            }
+            if (!org.names.has(name)) return false;
         }
 
         for (const field of orig.fields) {
-            if (!org.fields.has(field)) {
-                console.warn(
-                    `Field "${field}" for path ${path} missing after organizing`,
-                );
-                return false;
-            }
+            if (!org.fields.has(field)) return false;
         }
     }
 
     for (const path of orgMap.keys()) {
-        if (!origMap.has(path)) {
-            console.warn(`Unexpected path ${path} added after organizing`);
-            return false;
-        }
+        if (!origMap.has(path)) return false;
     }
 
     return true;
@@ -324,9 +308,6 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
 
         // If we found fewer valid imports than original, some are malformed
         if (validCount < origCount) {
-            console.warn(
-                `Found ${origCount} imports but only ${validCount} parsed. Preserving original.`,
-            );
             return tree;
         }
 
@@ -335,9 +316,6 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
 
         const organizedTree = wasm.parse_token_tree(organizedText.trim());
         if (organizedTree.token_tree_type !== 'Group') {
-            console.warn(
-                'Failed to parse organized imports. Preserving original.',
-            );
             return tree;
         }
 
@@ -345,14 +323,12 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
         const organizedCount = organizedTrees.filter(isImportKeyword).length;
 
         if (organizedCount === 0) {
-            console.warn('No imports in organized tree. Preserving original.');
             return tree;
         }
 
         // Validate that all original imports are preserved in the organized version
         const organizedImports = extractImports(organizedTree);
         if (!validateImportsPreserved(imports, organizedImports)) {
-            console.warn('Import data changed. Preserving original.');
             return tree;
         }
 
@@ -391,11 +367,7 @@ export function transformOrganizeImports(tree: TokenTree): TokenTree {
         }
 
         return { token_tree_type: 'Group', data: [newTrees, groupType, pair] };
-    } catch (error) {
-        console.warn(
-            'Error organizing imports:',
-            error instanceof Error ? error.message : String(error),
-        );
+    } catch {
         return tree;
     }
 }
