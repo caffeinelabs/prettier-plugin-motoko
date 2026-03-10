@@ -11,6 +11,7 @@ import {
     getTokenTreeText,
     withoutLineBreaks,
 } from './utils';
+import { transformOrganizeImports } from './organizeImports';
 
 export type Space =
     | (
@@ -111,15 +112,20 @@ export default function print(
     print: (path: AstPath<TokenTree>) => Doc,
     args?: unknown,
 ): Doc {
-    const tree = path.getValue();
+    let tree = path.getValue();
     if (tree === null) {
         return '';
-    } else {
-        const doc = printTokenTree(tree, path, options, print, args);
-        return doc || (Array.isArray(doc) && doc.length)
-            ? [doc, literallineWithoutBreakParent]
-            : doc;
     }
+
+    // Organize imports if option is enabled
+    if (options.motokoOrganizeImports && tree.token_tree_type === 'Group') {
+        tree = transformOrganizeImports(tree);
+    }
+
+    const doc = printTokenTree(tree, path, options, print, args);
+    return doc || (Array.isArray(doc) && doc.length)
+        ? [doc, literallineWithoutBreakParent]
+        : doc;
 }
 
 function shouldSkipTokenTree(tree: TokenTree): boolean {

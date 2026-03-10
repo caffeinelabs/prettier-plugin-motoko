@@ -64,6 +64,48 @@ Add the following line to your config file:
 }
 ```
 
+### Motoko-specific options
+
+#### `motokoOrganizeImports` (default: `false`)
+
+Automatically organize and sort import statements. When enabled, imports are:
+- Grouped by prefix (`ic:`, `canister:`, `mo:`, and relative paths)
+- Sorted alphabetically within each group
+- Combined when importing from the same path
+- Separated by blank lines between groups
+- Comments within the import section are preserved and moved below the organized imports
+
+Example:
+
+```motoko
+// Before formatting
+import Text "mo:base/Text";
+import Utils "./utils";
+import Core "canister:core";
+import Array "mo:base/Array";
+
+// After formatting with motokoOrganizeImports: true
+import Core "canister:core";
+
+import Array "mo:base/Array";
+import Text "mo:base/Text";
+
+import Utils "./utils";
+```
+
+To enable this option, add it to your `.prettierrc`:
+
+```json
+{
+    "plugins": ["prettier-plugin-motoko"],
+    "motokoOrganizeImports": true
+}
+```
+
+#### `motokoRemoveLinesAroundCodeBlocks` (default: `false`)
+
+Remove extra blank lines at the beginning and end of code blocks.
+
 ## Multiple languages
 
 Prettier will apply the same configuration to Motoko, JavaScript, CSS, HTML, and any other supported languages. 
