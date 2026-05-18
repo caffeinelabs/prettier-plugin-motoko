@@ -168,9 +168,16 @@ const spaceConfig: SpaceConfig = {
         // [tokenEquals('#'), 'Ident', 'keep'],
 
         // prefix/postfix operators
+        [tokenEquals('do'), tokenEquals('?'), 'space'],
         [{ left: tokenEquals('do'), main: tokenEquals('?') }, '_', 'space'],
         // [tokenEquals('?'), 'Curly', 'keep'],
+
+        // optional syntax and null coalesce operator
+        [{ left: tokenEquals('?'), main: tokenEquals('?') }, '_', 'keep'],
+        ['_', { main: tokenEquals('?'), right: tokenEquals('?') }, 'keep'],
+        ['_', tokenEquals('?'), 'nil'],
         [tokenEquals('?'), '_', 'nil'],
+
         ['_', tokenEquals('!'), 'nil'],
 
         // tags and concatenation
