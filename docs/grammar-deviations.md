@@ -44,22 +44,23 @@ Probe scripts (run with `node .probe/<name>.mjs` from the repo root unless noted
 
 ## Summary table
 
-| #   | deviation                                   | ts                          | moc                              | severity                   |
-| --- | ------------------------------------------- | --------------------------- | -------------------------------- | -------------------------- |
-| 1   | `if g(1) -1 > 0 {}`                         | parses (as `g(1) - 1 > 0`)  | **rejects**                      | **critical**               |
-| 2   | `if (c) -h {} else {5}`                     | `bin_exp[(c) - h]` + branch | `CallE(h, {})` negated           | **critical**               |
-| 3   | Spaced type application `List <T>`          | **ERROR**                   | accepts                          | **critical**               |
-| 4   | Flat operator precedence                    | all one left-assoc level    | real precedence table            | **critical**               |
-| 5   | `@`-privileged identifiers                  | **unreachable rule**        | accepts                          | **critical**               |
-| 6   | `shared composite func`                     | parses (wrongly)            | **rejects**                      | high                       |
-| 7   | `shared query composite func`               | parses (wrongly)            | **rejects**                      | high                       |
-| 8   | `??` token eats one trailing space          | token text `"?? "`          | split token                      | high                       |
-| 9   | `<` / `>` need whitespace on **both** sides | accepts both readings       | rejects one-sided                | medium                     |
-| 10  | `5.toText()` int_literal leaf `"5."`        | different node shape        | `DotE(LitE 5, …)`                | medium                     |
-| 11  | `!x` prefix, `x!` postfix                   | **ERROR** / bang exp        | rejects `!x`                     | low                        |
-| 12  | Object-type member shapes                   | accepts more than moc       | rejects `shared f :`, `func f :` | low                        |
-| 13  | `doc/schat.mo`                              | 8 error nodes               | rejects at the same construct    | n/a (dead file)            |
-| 14  | `include I;` sets no `isError`/`isMissing`  | error, but unflagged        | rejects                          | **high** (error reporting) |
+| #   | deviation                                     | ts                          | moc                              | severity                          |
+| --- | --------------------------------------------- | --------------------------- | -------------------------------- | --------------------------------- |
+| 1   | `if g(1) -1 > 0 {}`                           | parses (as `g(1) - 1 > 0`)  | **rejects**                      | **critical**                      |
+| 2   | `if (c) -h {} else {5}`                       | `bin_exp[(c) - h]` + branch | `CallE(h, {})` negated           | **critical**                      |
+| 3   | Spaced type application `List <T>`            | **ERROR**                   | accepts                          | **critical**                      |
+| 4   | Flat operator precedence                      | all one left-assoc level    | real precedence table            | **critical**                      |
+| 5   | `@`-privileged identifiers                    | **unreachable rule**        | accepts                          | **critical**                      |
+| 6   | `shared composite func`                       | parses (wrongly)            | **rejects**                      | high                              |
+| 7   | `shared query composite func`                 | parses (wrongly)            | **rejects**                      | high                              |
+| 8   | `??` token eats one trailing space            | token text `"?? "`          | split token                      | high                              |
+| 9   | `<` / `>` need whitespace on **both** sides   | accepts both readings       | rejects one-sided                | medium                            |
+| 10  | `5.toText()` int_literal leaf `"5."`          | different node shape        | `DotE(LitE 5, …)`                | medium                            |
+| 11  | `!x` prefix, `x!` postfix                     | **ERROR** / bang exp        | rejects `!x`                     | low                               |
+| 12  | Object-type member shapes                     | accepts more than moc       | rejects `shared f :`, `func f :` | low                               |
+| 13  | `doc/schat.mo`                                | 8 error nodes               | rejects at the same construct    | n/a (dead file)                   |
+| 14  | `include I;` sets no `isError`/`isMissing`    | error, but unflagged        | rejects                          | **high** (error reporting)        |
+| 15  | Keywords are not reserved (`let system = 1;`) | accepts as `identifier`     | rejects                          | low (printer) / medium (upstream) |
 
 ---
 
@@ -300,6 +301,23 @@ hard, reported failure — there is no partial-format story, because the
 surrounding declaration will have been consumed by an ERROR node. Wiring
 `privileged_identifier` into `identifier` (or into the appropriate pattern/typ
 alternatives) is the single highest-value upstream fix.
+
+**Measured corpus impact (M2, `.probe/_parseaudit.mts`).** Over all 4068 `.mo`
+files under the `motoko` checkout after excluding `_build`, `_out`,
+`node_modules`, `.git` and `.claude`: **56 parse failures, 0 guard failures, 0
+non-idempotent**. The 56 bucket as:
+
+| bucket                                               | count | verdict                                      |
+| ---------------------------------------------------- | ----- | -------------------------------------------- |
+| `.direnv/flake-inputs/**` (a second checkout of moc) | 28    | vendored duplicate — not our scope           |
+| `test/fail/**`                                       | 22    | deliberately unparseable fixtures            |
+| `src/prelude/{internals,prim,timers-api}.mo`         | 3     | **this deviation**                           |
+| `test/perf/qr/list.mo`                               | 1     | deviation §4 below (spaced type application) |
+| `test/run-drun/timer.mo`                             | 1     | **this deviation**                           |
+| `doc/schat.mo`                                       | 1     | invalid source, not a grammar bug (see §13)  |
+
+So `preserve` is complete over the corpus modulo these upstream gaps: every file
+the grammar accepts is formatted without a guard failure and is a fixed point.
 
 ## 6 & 7. `shared composite` / `shared query composite` — the plan's claim is inverted
 
@@ -554,6 +572,89 @@ seeing it again means a genuinely new recovery shape — which is the right time
 
 **Fixture note.** `tests/fixtures/objects-and-fields.mo` writes `include Inner();`. The `()` is
 load-bearing; omitting it is the invalid form above.
+
+---
+
+## 15. Any keyword may be used as an identifier
+
+**Repro**
+
+```motoko
+let system = 1;
+```
+
+**tree-sitter** — parses clean. `system_exp` is
+`seq("(", "system", _exp_post, ".", identifier, ")")` (`grammar.js:309`), so the keyword is
+reachable only inside that production. Off it, `system` in a name position falls through to
+`identifier: /[a-zA-Z_][a-zA-Z_0-9]*/` (`grammar.js:400`), which is a plain regex with no
+reserved-word exclusion. Nothing in the grammar stops it.
+
+**moc** — `moc -dp --check`:
+
+```
+t.mo:1.5-1.11: syntax error [M0275], unexpected token 'system', ...
+```
+
+`SYSTEM` is a `%token` (`parser.mly:241`) and is not in the identifier production.
+
+**Why.** tree-sitter resolves its keywords positionally — by which rule can currently shift the
+literal — rather than lexically. A word is a keyword only in the position that expects it; in every
+other position it is an `identifier`. This is normal for tree-sitter grammars and is normally
+harmless, because the constructs a keyword could be confused with are still recognised by their own
+productions.
+
+**But the blast radius is wider than it looks.** Every keyword we probed is accepted as a `let`
+name:
+
+```
+node .probe/_kw.mts
+accepted as a let-name : if else while for do switch case loop label break continue return throw
+  try catch finally assert ignore debug let var func type module actor class object shared query
+  async await public private import include mixin system from_candid to_candid not and or true
+  false null stable flexible composite implicit forall forsome with in
+rejected                : (none)
+```
+
+So the honest statement is not "`system`" but **"the grammar has no notion of a reserved word at
+all."** Most of those need a following token to be a plausible statement (`if` alone wants a
+condition), which is why a real corpus does not trip it, and why only one entry below actually
+reached the printer.
+
+**Severity: low for the printer, but it is a parser-shape hazard, not a formatting one.** The
+danger is not that the printer corrupts such a file — the file is already invalid, and moc rejects
+it. The danger is that the printer has no way to _know_ it is invalid, so it formats and hands back
+a plausible-looking result for source that never compiled. A formatter cannot fix this from the
+tree alone; the mitigation is that moc rejects it loudly at the user's next build, and the printer
+never invents or renames an identifier, so it cannot turn valid input into this.
+
+**Two concrete cases worth pinning, because they are the ones that read as valid Motoko:**
+
+```motoko
+let x = system f;      // tree-sitter: call_exp_object(f, ...) with callee `system`
+```
+
+tree-sitter reads this as a **juxtaposition call of a variable named `system`** — the CST dump is
+`call_exp_object > var_exp(identifier "system") Text(" ") var_exp(identifier "f")`. moc rejects it.
+A printer that trusted the tree would emit `system f;` back, which is what the input said, so
+`preserve` is not violated — but the printer must not "helpfully" rewrite it to `system(f)`, which
+`tight-apply` would otherwise be tempted to do to every `call_exp_object` with a bare callee.
+
+```motoko
+let x = (system f).x;  // tree-sitter: ERROR; moc accepts (773 in parser.mly)
+```
+
+The reverse direction: the parenthesised head is what moc requires, and tree-sitter rejects it. This
+is the `_exp_post` + `DOT` shape at `parser.mly:773`. So `system` has a spelling each parser accepts
+and the other rejects, and **there is no spelling both accept** — which is why this row is filed as
+a grammar bug rather than worked around in the printer. It is flagged `(parser-shape)` in the
+upstream list, not `(accepts-more)`, because a printer cannot satisfy both.
+
+**Formatter rule.** Treat `var_exp > identifier` as authoritative for the token's text and never
+normalise it against a keyword list — the tree is the source of truth, and second-guessing it here
+would mean inventing a second lexer. Do not extend `tight-apply` to a `call_exp_object` whose callee
+is a bare `identifier` that the source shows unparenthesised and spaced: `system f` must round-trip
+as `system f`, not as `system(f)`. The `tight-apply` rewrite is for the `moc2` mode only, where the
+target syntax has no juxtaposition to preserve.
 
 ---
 
