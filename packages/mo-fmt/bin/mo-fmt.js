@@ -1,4 +1,4 @@
 #! /usr/bin/env node
-'use strict'
+'use strict';
 
 module.exports = require('../src/cli');

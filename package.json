@@ -13,19 +13,24 @@
         "build": "run-s build:wasm build:ts",
         "test": "npm run build:wasm:nodejs && npm run test:quick",
         "test:quick": "node --experimental-vm-modules node_modules/jest/bin/jest",
+        "typecheck": "tsc -p . --noEmit",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
         "package": "cd packages/mo-fmt && npm run package",
         "prepublishOnly": "run-s build test:quick"
     },
+    "engines": {
+        "node": ">=22"
+    },
     "devDependencies": {
-        "@types/jest": "^28.1.7",
+        "@types/jest": "^30.0.0",
         "fast-glob": "^3.2.11",
-        "jest": "^28.1.3",
+        "jest": "^30.5.1",
         "npm-run-all": "^4.1.5",
         "pkg": "^5.8.0",
         "prettier": "^3.5.3",
-        "ts-jest": "^28.0.8",
-        "ts-node": "^10.9.1",
-        "typescript": "^4.8.2",
+        "ts-jest": "^29.4.12",
+        "typescript": "^5.9.3",
         "wasm-pack": "^0.11.1"
     },
     "peerDependencies": {

@@ -21,16 +21,16 @@ How the plugin works:
 
 Repos in the picture:
 
-| repo | role |
-|---|---|
-| caffeinelabs/prettier-plugin-motoko | the plugin, the wasm shim, `mo-fmt` |
-| caffeinelabs/motoko.rs | the lexer behind the wasm shim. Its parser and interpreter are unused. |
-| caffeinelabs/mops | bundles the plugin, `mops format`, the toolchain (`moc`, `lintoko`) |
-| caffeinelabs/vscode-motoko | bundles the plugin, format on save |
-| dfinity/motoko-playground | bundles the plugin |
-| caffeinelabs/tree-sitter-motoko | the grammar lintoko uses. Now parses moc 2.0 syntax (PR #25). |
-| caffeinelabs/lintoko | linter on top of tree-sitter-motoko, pins the grammar by git rev |
-| caffeinelabs/motoko | the compiler. Source of truth for the syntax. moc 2.0 adds the new forms, v3 removes the old ones (#6352). |
+| repo                                | role                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| caffeinelabs/prettier-plugin-motoko | the plugin, the wasm shim, `mo-fmt`                                                                        |
+| caffeinelabs/motoko.rs              | the lexer behind the wasm shim. Its parser and interpreter are unused.                                     |
+| caffeinelabs/mops                   | bundles the plugin, `mops format`, the toolchain (`moc`, `lintoko`)                                        |
+| caffeinelabs/vscode-motoko          | bundles the plugin, format on save                                                                         |
+| dfinity/motoko-playground           | bundles the plugin                                                                                         |
+| caffeinelabs/tree-sitter-motoko     | the grammar lintoko uses. Now parses moc 2.0 syntax (PR #25).                                              |
+| caffeinelabs/lintoko                | linter on top of tree-sitter-motoko, pins the grammar by git rev                                           |
+| caffeinelabs/motoko                 | the compiler. Source of truth for the syntax. moc 2.0 adds the new forms, v3 removes the old ones (#6352). |
 
 ## Plan for moc v2
 
