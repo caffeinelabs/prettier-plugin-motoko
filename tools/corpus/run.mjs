@@ -62,6 +62,7 @@ import {
     resolveRev,
 } from './lib/git.mjs';
 import { countAllFences, extractMotokoFences } from './lib/fences.mjs';
+import { findMoc, parseTree, sameTree } from './lib/moc-oracle.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..');
@@ -81,17 +82,22 @@ Options:
                         Applies to the compiler repo only; supporting package sets are read at
                         their own default branch. Records the resolved commit either way.
   --motoko <dir>        path to the Motoko checkout   (default: ../motoko next to this repo)
-  --oracle-rev <rev>    moc AST-oracle pin. Accepted and recorded for provenance; the oracle
-                        layer itself is NOT implemented (see RESULTS.md) — passing it is a no-op.
+  --oracle-rev <rev>    provenance pin for the compiler source the corpus is read at. Recorded, not
+                        honoured as a binary selector: the AST oracle runs whichever moc the search
+                        finds (MOC=<path> to override), and reports that binary's version.
   --report <path>       where to write the human report (markdown)   (default: tools/corpus/RESULTS.md)
   --json <path>         where to write the machine report            (default: tools/corpus/report.json)
   --repos <dir>         directory to scan for sibling checkouts      (default: this repo's parent)
   --no-siblings         check only the Motoko repo, skip every sibling package set
+  --require-oracle      fail the run when no moc binary is found. Use this in CI: without it a
+                        runner with no moc silently reports the oracle as "not run", which turns
+                        the strongest check in the harness into no check at all.
   --quiet               suppress per-unit progress lines
   -h, --help            this text
 
 Exit code is 0 when nothing crashed and no unit failed the checks that CAN run. Units the grammar
 rejects are counted and listed but are not a failure: they are expected (docs/grammar-deviations.md).
+--require-oracle is the one exception that turns an absent tool into a failure.
 `;
 
 function parseArgs(argv) {
@@ -105,6 +111,7 @@ function parseArgs(argv) {
         reposDir: resolve(repoRoot, '..'),
         siblings: true,
         quiet: false,
+        requireOracle: false,
     };
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
@@ -144,6 +151,9 @@ function parseArgs(argv) {
                 break;
             case '--quiet':
                 opts.quiet = true;
+                break;
+            case '--require-oracle':
+                opts.requireOracle = true;
                 break;
             default:
                 throw new Error(`unknown argument: ${arg}`);
@@ -572,6 +582,11 @@ async function checkPrinter(unit, deps, sourceRoot, printed) {
     const { parse, shapeOf, compareShapes } = deps;
     const started = process.hrtime.bigint();
     const ms = () => Number(process.hrtime.bigint() - started) / 1e6;
+    // Distinct temp-file names per oracle invocation, so two units in flight cannot collide and a
+    // mismatch report names a readable unit. The counter lives on the function so it survives across
+    // units.
+    const nextOracleSeq = () =>
+        (checkPrinter.oracleSeq = (checkPrinter.oracleSeq ?? 0) + 1);
 
     let outRoot;
     try {
@@ -616,7 +631,51 @@ async function checkPrinter(unit, deps, sourceRoot, printed) {
         };
     }
 
-    return { status: 'ok', ms: ms() };
+    // The moc oracle: does MOC read the output as the same program the input was? This is the layer
+    // the guard cannot substitute for, because the guard re-parses with our grammar and is blind
+    // wherever the grammar deviates (docs/grammar-deviations.md). Skipped, never faked, when moc is
+    // absent -- a silent pass here would be the exact failure this layer exists to catch.
+    let oracleRan = false;
+    if (deps.moc) {
+        const n = nextOracleSeq();
+        const before = deps.parseTree(deps.moc, unit.text, `oracle-${n}-in`);
+        if (before !== null) {
+            const after = deps.parseTree(deps.moc, printed, `oracle-${n}-out`);
+            oracleRan = true;
+            if (!deps.sameTree(before, after)) {
+                return {
+                    status: 'printer-oracle',
+                    message:
+                        'moc reads the printed output as a different tree than the input',
+                    firstDiff: firstTokenDiff(before, after),
+                    ms: ms(),
+                };
+            }
+        }
+        // `before === null` means moc rejects the INPUT, which is moc's business and not the
+        // printer's: the unit count for it is reported separately rather than counted as a pass.
+    }
+
+    return { status: 'ok', oracleRan, ms: ms() };
+}
+
+/**
+ * The first differing token between two `-dp` dumps, with a little context on each side.
+ *
+ * Tokens rather than lines: the dump is a pretty-printer whose wrapping moves when the tree moves,
+ * so a line diff would print the whole file from the first difference onward.
+ */
+function firstTokenDiff(before, after) {
+    const a = before.split(' ');
+    const b = (after ?? '').split(' ');
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    const lo = Math.max(0, i - 12);
+    return {
+        token: i,
+        expected: a.slice(lo, i + 8).join(' '),
+        actual: b.slice(lo, i + 8).join(' '),
+    };
 }
 
 /** The first line where two texts differ, for a report that stays readable on a 2000-line file. */
@@ -753,11 +812,19 @@ async function selfTest(deps) {
  *   - a `sourceRoot` from a different program makes tree equality detect a difference (and proves
  *     `compareShapes` is being consulted rather than assumed);
  *   - a `printed` string that is not a fixed point makes idempotence fail;
- *   - a `printed` string that does not parse makes re-parse fail.
+ *   - a `printed` string that does not parse makes re-parse fail;
+ *   - when a `moc` binary is present, a `printed` string that moc reads differently makes the oracle
+ *     fail.
  *
- * The last two are simulated by driving the pieces directly rather than by finding a source the
+ * The last three are simulated by driving the pieces directly rather than by finding a source the
  * printer mishandles — there is no such source, which is the point of the run — so the checks here
- * are of the harness's logic, not of the printer.
+ * are of the harness's logic, not of the printer. The oracle case is the one that can only be built
+ * this way, and deliberately so: it uses the spaced-type-application form (`List< Nat >`) that
+ * `docs/grammar-deviations.md` §3 catalogues, because that is a string our grammar reads as the same
+ * program, that is a fixed point, and that moc refuses to parse at all. Every other check passes on
+ * it, so if the oracle is wired up it is the only one left to object — which is exactly the claim
+ * being tested. If our grammar ever stops accepting that form, this case fails loudly with
+ * `printer-reparse` instead of silently passing, which is the right signal: the deviation moved.
  */
 async function printerSelfTest(deps) {
     const { parse } = deps;
@@ -826,6 +893,42 @@ async function printerSelfTest(deps) {
             'printer-idempotence',
             unstable.status,
         );
+
+        // The oracle must be able to speak, and this is the only input that isolates it: a spaced
+        // type-application (`List< Nat >`, `docs/grammar-deviations.md` §3) is read by our grammar
+        // as the same program, is a fixed point, and is still a failure — because moc will not parse
+        // it at all. Re-parse, tree equality and idempotence all pass on it, so the oracle is the
+        // only check left that can object, which is exactly the claim being tested. With no `moc`
+        // binary the layer is honestly absent and no case is recorded.
+        //
+        // `printed` is produced by `format` rather than written by hand: the idempotence check
+        // compares against `format`'s own output, trailing newline included, so a hand-written
+        // string fails idempotence first and the oracle never gets a turn.
+        if (deps.moc) {
+            const unspaced =
+                'actor { public func f() : async () { let x : List<Nat> = l; } };';
+            const spaced = await deps.format(
+                unspaced.replace('<Nat>', '< Nat >'),
+            );
+            const angleUnit = {
+                id: 0,
+                source: 'self-test',
+                path: 'self-test',
+                line: null,
+                text: unspaced,
+            };
+            const oracleOnly = await checkPrinter(
+                angleUnit,
+                deps,
+                (await parse(unspaced)).root,
+                spaced,
+            );
+            record(
+                'printer self-test: an oracle-only mismatch is caught',
+                'printer-oracle',
+                oracleOnly.status,
+            );
+        }
     } catch (error) {
         record(
             `printer self-test: threw (${firstLine(String(error?.message))})`,
@@ -961,6 +1064,12 @@ async function main() {
         shapeOf: normalizeModule.shapeOf,
         compareShapes: verifyModule.compareShapes,
         format,
+        // The moc AST oracle. `moc` is null when no binary was found, and every oracle check then
+        // reports "not run" with the reason instead of passing -- the layer must never be able to
+        // pass by doing nothing.
+        moc: findMoc(opts.motokoDir),
+        parseTree,
+        sameTree,
     };
     if (
         typeof deps.parse !== 'function' ||
@@ -973,6 +1082,19 @@ async function main() {
             'corpus harness: src/parser/parse.ts, normalize.ts, verify.ts or src/index.ts did not ' +
                 'export the expected functions. The harness measures those modules; a rename must ' +
                 'be reflected here.',
+        );
+    }
+
+    // `--require-oracle` turns the one honest absence into a failure, and does it HERE rather than
+    // at the exit-code computation: a runner with no moc would otherwise spend the whole run and
+    // then report "oracle: not run" as green. Without the flag, an absent oracle is correct on a
+    // developer machine and the report says so; with it, an oracle-less run declares itself
+    // incomplete instead of looking finished, which is what CI wants.
+    if (opts.requireOracle && !deps.moc) {
+        throw new Error(
+            'corpus harness: --require-oracle was passed but no moc binary was found. Set ' +
+                'MOC=<path>, or build the pinned head (docs/grammar-deviations.md). Refusing to ' +
+                'run an oracle-less corpus job that would report green.',
         );
     }
 
@@ -1109,6 +1231,7 @@ async function main() {
         'printer-reparse': [],
         'printer-tree': [],
         'printer-idempotence': [],
+        'printer-oracle': [],
     };
     let ok = 0;
     // Units that never reached the printer, because the grammar rejected them. Tracked separately
@@ -1118,6 +1241,9 @@ async function main() {
     // set and `printerChecked + printerFailures + notFormattable === units`.
     let notFormattable = 0;
     let printerChecked = 0;
+    // Units the moc oracle actually reached: parsed by moc on both sides and compared. Kept apart
+    // from `printerChecked` so "0 of 0 oracle mismatches" can never be reported as a pass.
+    let oracleChecked = 0;
     // Per-source printer tallies. Kept as a separate map rather than folded into `bySource`'s `ok`
     // because those two numbers mean different things: `ok` is "the parser accepted this unit",
     // which is what the M1 headline measures, while these are the M2 addendum. Folding them would
@@ -1129,6 +1255,8 @@ async function main() {
             reparse: 0,
             tree: 0,
             idempotence: 0,
+            oracle: 0,
+            oracleChecked: 0,
         };
         row[key] += 1;
         printerBySource.set(source, row);
@@ -1172,6 +1300,13 @@ async function main() {
                 if (check.status === 'ok') {
                     printerChecked += 1;
                     tally(unit.source, 'checked');
+                    // The oracle's own denominator: units moc could parse AND agree on. A unit moc
+                    // rejects has no oracle verdict, and reporting it in the oracle denominator
+                    // would inflate coverage with units that were never checked.
+                    if (check.oracleRan) {
+                        oracleChecked += 1;
+                        tally(unit.source, 'oracleChecked');
+                    }
                 } else {
                     failures[check.status].push({
                         id: unit.id,
@@ -1267,6 +1402,8 @@ async function main() {
         target.printerReParse = row.reparse;
         target.printerTree = row.tree;
         target.printerIdempotence = row.idempotence;
+        target.printerOracle = row.oracle;
+        target.oracleChecked = row.oracleChecked;
     }
     for (const [label, row] of bySource) {
         row.ok =
@@ -1284,7 +1421,17 @@ async function main() {
         pins: {
             motokoRev: opts.motokoRev ?? 'HEAD',
             oracleRev: opts.oracleRev,
-            oracleLayer: 'not-implemented',
+            // `oracleRev` still pins the compiler source the corpus is read at; the AST oracle is a
+            // moc BINARY, so what it actually ran is recorded here rather than only the revision
+            // asked for. `oracleLayer` says whether it ran at all.
+            oracleLayer: deps.moc ? 'run' : 'not-run',
+            oracleBinary: deps.moc
+                ? {
+                      path: deps.moc.path,
+                      version: deps.moc.version,
+                      kind: deps.moc.kind,
+                  }
+                : null,
         },
         grammar: await grammarProvenance(),
         environment: {
@@ -1308,6 +1455,11 @@ async function main() {
             printerReParse: failures['printer-reparse'].length,
             printerTree: failures['printer-tree'].length,
             printerIdempotence: failures['printer-idempotence'].length,
+            printerOracle: failures['printer-oracle'].length,
+            // The oracle's honest denominators. `oracleChecked` counts units moc could parse on
+            // both sides, so a run with no moc binary reports 0 checked and "not-run" below.
+            oracleChecked,
+            oracleNotRun: deps.moc ? 0 : printerChecked,
         },
         checks: {
             parse: 'run',
@@ -1316,8 +1468,9 @@ async function main() {
             idempotence: 'run',
             reParse: 'run',
             treeEquality: 'run',
-            mocOracle:
-                'not-run (no oracle layer; parseMotoko JS artifact absent)',
+            mocOracle: deps.moc
+                ? `run (${deps.moc.version || deps.moc.path})`
+                : 'not-run (no moc binary found; MOC=<path> to enable)',
         },
         fences: counters.fences,
         sources: [...bySource.entries()].map(([label, row]) => {
@@ -1371,6 +1524,14 @@ async function main() {
                 `tree-diff ${report.totals.printerTree}  ` +
                 `idempotence-fail ${report.totals.printerIdempotence}  ` +
                 `(not-formattable ${report.totals.notFormattable})`,
+            // The oracle gets its own line, and an explicit "not run" when moc is absent, because
+            // "0 mismatches" and "0 of 0 checked" are different claims and the second must never
+            // read as the first. Keyed off `pins.oracleLayer` rather than comparing two totals:
+            // the totals are a coincidence of arithmetic, the pin is the actual fact.
+            report.pins.oracleLayer === 'not-run'
+                ? `oracle  not run (no moc binary found; set MOC=<path>)`
+                : `oracle  ${report.totals.oracleChecked}/${report.totals.printerChecked} checked  ` +
+                  `mismatches ${report.totals.printerOracle}`,
             `skipped ${report.skips.length} item(s) across ${Object.keys(report.skipsByKind).length} kind(s)`,
             `wrote ${relative(process.cwd(), opts.json)}`,
             `wrote ${relative(process.cwd(), opts.report)}`,
@@ -1383,6 +1544,11 @@ async function main() {
     // failure is by definition our bug, since a corpus file that parsed cleanly was formatted and
     // the result either did not parse, did not mean the same thing, or was not a fixed point.
     // Ordinary grammar rejections on fixtures, documented deviations and Markdown fences do not.
+    //
+    // `printer-oracle` belongs in this sum even though it can only fire when a `moc` binary is
+    // present: with no `moc` the list is necessarily empty, so its presence costs nothing, and with
+    // one, an oracle mismatch is the *most* serious of the four — the other three ask our own
+    // grammar whether the output is still the same program, and this one asks moc.
     const fatal =
         failures.crash.length +
         failures['round-trip'].length +
@@ -1390,6 +1556,7 @@ async function main() {
         failures['printer-reparse'].length +
         failures['printer-tree'].length +
         failures['printer-idempotence'].length +
+        failures['printer-oracle'].length +
         unexpected.length;
     process.exitCode = fatal === 0 ? 0 : 1;
 }
@@ -1565,16 +1732,31 @@ function renderReport(report, opts) {
         `| output does not parse (OUR BUG) | ${t.printerReParse} | \`format\` threw, or its output was rejected |`,
         `| output means something else (OUR BUG) | ${t.printerTree} | \`compareShapes\` found a difference |`,
         `| output is not a fixed point (OUR BUG) | ${t.printerIdempotence} | formatting twice differs from formatting once |`,
+        `| \`moc\` reads the output differently (OUR BUG) | ${t.printerOracle} | the moc AST oracle disagreed — it uses \`moc\`'s parser, so it catches readings our own grammar gets wrong (\`docs/grammar-deviations.md\`) |`,
         `| units the grammar rejected or the normaliser failed, so no output to compare | ${t.notFormattable} | they are the ${t.syntaxError} syntax error(s), ${t.roundTrip} round-trip failure(s), ${t.crash} crash(es) and ${t.invariant} invariant violation(s) above, so \`${t.notFormattable} = ${t.units} - ${t.ok}\` |`,
     );
     lines.push('');
     lines.push(
-        `The three printer failure counts are what fail the run. \`${t.printerChecked} + ${t.notFormattable} = ${t.ok}\` ` +
-            `is the accounting identity: every parse-ok unit was formatted and checked, and the rest ` +
-            `never had an output to check. With all three at zero the honest claim is *every unit ` +
-            `that parsed was formatted into something that parses, means the same thing, and is a ` +
-            `fixed point* — not "the printer is correct", because \`shapeOf\` cannot see the angle ` +
-            `seams (§ above).`,
+        `The four printer failure counts are what fail the run. \`${t.printerChecked} + ${t.notFormattable} = ${t.units}\` ` +
+            `is the accounting identity: every parse-ok unit (${t.printerChecked}) was formatted and ` +
+            `checked, the rest (${t.notFormattable}) never had an output to check. With all four at ` +
+            `zero the honest claim is *every unit that parsed was formatted into something that ` +
+            `parses, means the same thing, and is a fixed point* — not "the printer is correct", ` +
+            `because \`shapeOf\` cannot see the angle seams (§ above).`,
+    );
+    lines.push('');
+    lines.push(
+        report.pins.oracleBinary
+            ? `The moc AST oracle ran on **${t.oracleChecked}/${t.printerChecked}** of the units that ` +
+                  `reached the printer, under \`${report.pins.oracleBinary.version || report.pins.oracleBinary.path}\`. ` +
+                  `The remaining ${t.printerChecked - t.oracleChecked} are units \`moc\` itself rejects, which have ` +
+                  `no oracle verdict rather than a passing one. This layer is strictly stronger than the ` +
+                  `\`compareShapes\` row above: it asks \`moc\`, not our grammar, so it sees the readings our ` +
+                  `grammar gets wrong — and a zero here and a zero there are therefore different claims.`
+            : `The moc AST oracle **did not run** (\`${t.oracleNotRun}\` units went unchecked by it). ` +
+                  `It needs a \`moc\` binary: set \`MOC=<path>\`, or build one at the path ` +
+                  `\`docs/grammar-deviations.md\` documents. The layer being absent is reported as ` +
+                  `*not-run*, never as a zero, because a check that cannot fail proves nothing.`,
     );
     lines.push('');
     lines.push(
@@ -1605,24 +1787,26 @@ function renderReport(report, opts) {
     );
     lines.push('');
     lines.push(
-        '| source | units | files | fences | ok | syntax-error | crash | round-trip | invariant | printed | reparse-fail | tree-diff | idem-fail |',
+        '| source | units | files | fences | ok | syntax-error | crash | round-trip | invariant | printed | reparse-fail | tree-diff | idem-fail | oracle-mismatch | oracle-checked |',
     );
     lines.push(
-        '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+        '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
     );
     for (const row of report.sources) {
         lines.push(
             `| ${row.label} | ${row.units} | ${row.files} | ${row.fences} | ${row.ok} | ${row.syntaxError} | ` +
                 `${row.crash} | ${row.roundTrip} | ${row.invariant} | ${row.printerChecked} | ` +
-                `${row.printerReParse} | ${row.printerTree} | ${row.printerIdempotence} |`,
+                `${row.printerReParse} | ${row.printerTree} | ${row.printerIdempotence} | ` +
+                `${row.printerOracle ?? 0} | ${row.oracleChecked ?? 0} |`,
         );
     }
     lines.push('');
     lines.push(
-        'The last four columns are the printer half for that source. `printed` counts units that ' +
-            'were formatted and passed all three printer checks, so it is the denominator for the ' +
-            'three failure columns next to it — a source where `printed` is 0 makes a `0` in a ' +
-            'failure column meaningless, not reassuring.',
+        'The last six columns are the printer half for that source. `printed` counts units that ' +
+            'were formatted and passed all four printer checks, so it is the denominator for the ' +
+            'four failure columns next to it — a source where `printed` is 0 makes a `0` in a ' +
+            "failure column meaningless, not reassuring. `oracle-checked` is the oracle's own " +
+            'denominator, smaller than `printed` wherever `moc` rejects the input.',
     );
     if (report.fences.files > 0) {
         lines.push('');
@@ -1712,6 +1896,8 @@ function renderReport(report, opts) {
                 'Printer output that means something else (`compareShapes`) (bugs in our code — must be 0)',
             'printer-idempotence':
                 'Printer output that is not a fixed point (bugs in our code — must be 0)',
+            'printer-oracle':
+                'Printer output that moc reads as a different program (bugs in our code — must be 0; this is the strongest of the four, because it is the only one that does not answer with our own grammar)',
         }[kind];
         lines.push(`### ${label} — ${list.length}`);
         lines.push('');
@@ -1822,7 +2008,15 @@ function renderReport(report, opts) {
     }
     lines.push(`- motoko rev requested: \`${report.pins.motokoRev}\``);
     lines.push(
-        `- oracle rev (recorded, layer not implemented): \`${report.pins.oracleRev ?? '(none)'}\``,
+        `- oracle rev (provenance; the AST oracle itself is a \`moc\` binary, below): \`${report.pins.oracleRev ?? '(none)'}\``,
+    );
+    lines.push(
+        report.pins.oracleBinary
+            ? `- moc AST oracle: \`${report.pins.oracleBinary.version || report.pins.oracleBinary.path}\`` +
+                  ` (${report.pins.oracleBinary.kind}) at \`${report.pins.oracleBinary.path}\``
+            : '- moc AST oracle: **not run** — no `moc` binary found. Set `MOC=<path>` (or build one at the ' +
+                  'path `docs/grammar-deviations.md` documents) to enable the layer. Every other number ' +
+                  'in this report is unaffected; the oracle column is absent, not zero.',
     );
     lines.push('');
     lines.push(

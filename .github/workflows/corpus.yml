@@ -6,7 +6,8 @@
 # is a fixed point. A printer failure is a bug in this repo by definition, so it fails the run --
 # unlike a grammar rejection, which is expected and is accounted for in docs/grammar-deviations.md.
 # The harness proves its own checks are not vacuous before it reports (a round-trip self-test, a
-# fence self-test and a printer self-test); a self-test failure makes the whole run refuse.
+# fence self-test and a printer self-test, the last including a case that only the moc oracle can
+# catch); a self-test failure makes the whole run refuse.
 #
 # Why this is still not in tests.yml:
 #   - It is measured in minutes, not seconds, and it fails for reasons that are not the PR's
@@ -21,9 +22,15 @@
 #     --motoko-rev <rev>               applies to the compiler repo only; sibling package sets are
 #                                      read at their own default branch, and the resolved commit is
 #                                      recorded either way
-#     --oracle-rev <rev>               accepted and recorded for provenance, but a NO-OP today: the
-#                                      moc AST-oracle layer is not implemented. Harmless to pass, and
-#                                      keeping it means the flag is already wired when the layer lands.
+#     --oracle-rev <rev>               provenance pin for the compiler source the corpus is read
+#                                      at. Recorded, NOT a binary selector: the AST oracle runs
+#                                      whichever moc the search finds, and the report names that
+#                                      binary and its version.
+#     --require-oracle                 fail the run when no moc binary is found. CI should normally
+#                                      NOT pass this until the job provisions moc (see the note on
+#                                      the oracle below); without it an oracle-less run reports
+#                                      "oracle: not run" and still exits 0, which is honest on a
+#                                      developer machine and a silent hole on a runner.
 #     --report <path>                  markdown, as assumed
 #   CORPUS_MOTOKO_REV / CORPUS_ORACLE_REV are also passed as env vars as a convenience; the flags
 #   are the contract. If the harness ever takes a revision some other way, CHANGE THIS FILE to
@@ -34,7 +41,7 @@
 #   changes out from under this file, that step fails with the new usage text instead of letting a
 #   mid-run "unknown option" surface as a corpus failure.
 #
-#   Three shape notes worth knowing when reading a run:
+#   Shape notes worth knowing when reading a run:
 #     - Exit code is 0 when nothing crashed, no unit failed the checks that CAN run, and no printer
 #       check failed. Units the grammar rejects are counted and listed but are NOT a failure — they
 #       are expected, and docs/grammar-deviations.md is where each one is justified. So green here
@@ -42,11 +49,22 @@
 #       deviation set, and the printer was a fixed point that changed no meaning".
 #     - The printer totals are reported against the units that reached the printer, not against
 #       the unit count: a unit the grammar rejects has no output to compare. The report prints both
-#       denominators and the identity `printed + not-formattable === parse-ok`.
+#       denominators and the identity `printed + not-formattable === units`.
+#     - The oracle has its OWN denominator, and it is smaller: it is the units `moc` parsed on both
+#       sides. The report prints it, and prints "not run" rather than a zero when no binary exists,
+#       so "0 mismatches" can never be confused with "0 of 0 checked".
 #     - A zero tree-difference count is a NECESSARY condition, not a sufficient one. `shapeOf`
 #       projects angle lists by node text, so it is blind to the `L8` seam where a broken list
 #       drops its close onto its own line and `moc` reads it as a greater-than operator. Those
 #       seams are pinned by tests/adjacency.test.ts; this job cannot see them.
+#     - THE MOC AST ORACLE IS A SEPARATE, STRONGER LAYER, and it does not run here yet. It feeds
+#       the input and the printed output to `moc -dp` and requires the same tree, which catches
+#       readings OUR grammar gets wrong -- exactly the blind spot the line above describes. It is
+#       found by searching for a moc binary (MOC=<path> overrides); this runner has none, so the
+#       report says `oracle: not run` and the job still exits 0. To make it real on CI, add a step
+#       that builds the pinned head (docs/grammar-deviations.md) or downloads a release binary,
+#       then pass --require-oracle so the job fails rather than silently skipping the check. Until
+#       then, treat a green run here as three layers green and the fourth unmeasured.
 #     - `--repos` defaults to this repo's parent, so the sibling package sets are absent unless
 #       something checked them out; the report says which units were unreachable. This job clones
 #       only the compiler (see the clone step), so the package sets appear as counted skips.
