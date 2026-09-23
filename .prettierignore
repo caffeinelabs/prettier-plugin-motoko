@@ -5,6 +5,7 @@
 /packages/mo-fmt/dist/
 /packages/mo-fmt/pkg/
 /tests/generated/
+/tests/test-webapp/dist/
 
 # Lockfiles are owned by npm, not by this project's style
 package-lock.json
