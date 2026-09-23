@@ -22,8 +22,15 @@ import { readFileSync } from 'node:fs';
  */
 export const FENCE_OPEN = /^([ \t]*)(`{3,}|~{3,})[ \t]*([^\s`]*)(.*)$/;
 
-/** The deliberately-wrong regex, kept so the harness can demonstrate the difference. */
-export const FENCE_OPEN_COL0 = /^(`{3,})[ \t]*([^\s`]*)(.*)$/;
+/**
+ * The deliberately-wrong regex, kept so the harness can demonstrate the difference.
+ *
+ * It carries the same five capture groups as `FENCE_OPEN` (an always-empty indent group followed by a
+ * negative lookahead that forbids leading whitespace), so `extractFences` can run both regexes through
+ * the identical scanner and only the anchoring differs.
+ */
+export const FENCE_OPEN_COL0 =
+    /^(?![ \t])([ \t]*)(`{3,}|~{3,})[ \t]*([^\s`]*)(.*)$/;
 
 /**
  * Is this fence's info string the motoko language?
@@ -41,13 +48,17 @@ export function isMotokoFence(infoWord) {
  *
  * Returns `{ infoWord, infoFull, indent, body, startLine, endLine, closed }` per fence. An unclosed
  * fence runs to end of file, exactly as a renderer would treat it, and is flagged `closed: false`.
+ *
+ * `openRe` may be overridden so the harness can run the same extractor with the deliberately-wrong
+ * column-0-anchored regex and compare apples to apples (open fences both ways). The close-fence
+ * regex is derived from the opener's fence run, so it stays correct either way.
  */
-export function extractFences(text) {
+export function extractFences(text, openRe = FENCE_OPEN) {
     const lines = text.split('\n');
     const out = [];
     let i = 0;
     while (i < lines.length) {
-        const m = FENCE_OPEN.exec(lines[i]);
+        const m = openRe.exec(lines[i]);
         if (!m) {
             i += 1;
             continue;
@@ -91,26 +102,24 @@ export function fencesToUnits(repoPath, text) {
 }
 
 /**
- * Count fence *spellings* in a file, for the two regexes, so a test can assert the real one is
- * strictly better. Returns `{ anchored, unanchored, motokoAnchored, motokoUnanchored }`.
+ * Count Motoko fences in a file under both regexes, so a test can assert the real one is strictly
+ * better. Both counts are *open* fences extracted by the same scanner; only the opener regex differs.
+ *
+ * Returns `{ openAnchored, openUnanchored, motokoAnchored, motokoUnanchored, allAnchored, allUnanchored }`.
+ * `open*` count every fence regardless of language; `motoko*` count only `motoko` fences.
  */
 export function proveFenceRegex(text) {
-    const lines = text.split('\n');
-    let anchored = 0;
-    let motokoAnchored = 0;
-    for (const line of lines) {
-        const m = FENCE_OPEN_COL0.exec(line);
-        if (!m) continue;
-        anchored += 1;
-        if (m[2] === 'motoko') motokoAnchored += 1;
-    }
-    const unanchored = extractFences(text);
+    const anchoredFences = extractFences(text, FENCE_OPEN_COL0);
+    const unanchoredFences = extractFences(text, FENCE_OPEN);
+    const motoko = (fs) => fs.filter((f) => f.infoWord === 'motoko').length;
     return {
-        anchored,
-        unanchored: unanchored.length,
-        motokoAnchored,
-        motokoUnanchored: unanchored.filter((f) => f.infoWord === 'motoko')
-            .length,
+        openAnchored: anchoredFences.length,
+        openUnanchored: unanchoredFences.length,
+        motokoAnchored: motoko(anchoredFences),
+        motokoUnanchored: motoko(unanchoredFences),
+        // Back-compat aliases used by the census's fence check.
+        anchored: anchoredFences.length,
+        unanchored: unanchoredFences.length,
     };
 }
 

@@ -17,7 +17,7 @@
 
 import { BASE, PRELUDE_PREFIX } from './config.mjs';
 import { assertCheckout, listFiles, readerFor } from './git.mjs';
-import { unitsForFile } from './units.mjs';
+import { unitsForFile, proveFenceRegex } from './units.mjs';
 import { createParser, grammarInfo } from './grammar.mjs';
 import { addCounts, groupCounts, scanTree, zeroCounts } from './residue.mjs';
 
@@ -138,6 +138,55 @@ export function checkExpected(censusResult, expected) {
             drops.push({ file, expected: want, observed: got.units });
     }
     return { ok: drops.length === 0 && missing.length === 0, drops, missing };
+}
+
+/**
+ * Check the fence-regex trap, rather than only describing it: for each Markdown file, extract fences
+ * with the column-0-anchored regex and with the real one, and compare motoko-fence counts.
+ *
+ * Returns `{ files, anchoredTotal, unanchoredTotal, motokoAnchoredTotal, motokoUnanchoredTotal,
+ * gainers, ok }`. `gainers` are files where the column-0-anchored regex finds **fewer** motoko fences
+ * than the real one — the style-guide.md failure mode. `ok` means **at least one gainer exists**: that
+ * is what proves the non-anchored regex is load-bearing rather than a stylistic preference, and it is
+ * the property that fails if someone weakens `FENCE_OPEN` back to column-0 anchoring, or if the
+ * indented-fence samples disappear from the corpus.
+ *
+ * Both numbers come from the same fence scanner, so only the opener regex differs — a bare ``` inside
+ * an indented block cannot inflate one side.
+ */
+export function checkFenceRegex(read, mdPaths) {
+    let anchoredTotal = 0;
+    let unanchoredTotal = 0;
+    let motokoAnchoredTotal = 0;
+    let motokoUnanchoredTotal = 0;
+    const gainers = [];
+    for (const p of mdPaths) {
+        const text = read(p);
+        if (text == null) continue;
+        const { anchored, unanchored, motokoAnchored, motokoUnanchored } =
+            proveFenceRegex(text);
+        anchoredTotal += anchored;
+        unanchoredTotal += unanchored;
+        motokoAnchoredTotal += motokoAnchored;
+        motokoUnanchoredTotal += motokoUnanchored;
+        if (motokoUnanchored > motokoAnchored)
+            gainers.push({
+                file: p,
+                motokoAnchored,
+                motokoUnanchored,
+                anchored,
+                unanchored,
+            });
+    }
+    return {
+        files: mdPaths.length,
+        anchoredTotal,
+        unanchoredTotal,
+        motokoAnchoredTotal,
+        motokoUnanchoredTotal,
+        gainers,
+        ok: gainers.length > 0,
+    };
 }
 
 /** Convenience: list every `.mo` and `.md` path at a revision (the census set is filtered later). */

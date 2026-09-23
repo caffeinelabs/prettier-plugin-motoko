@@ -14,8 +14,12 @@ target/
 # up as noise in `git status` while the M1/M2 specs are being written.
 /.probe/
 
-# The corpus harness's own output. Every run rewrites both, so committing them would dirty the
-# tree on each invocation and make a real source change indistinguishable from a re-run. The
-# workflow uploads RESULTS.md as a build artifact, which is where a run's numbers are read from.
+# Harness output. Every run rewrites these, so committing them would dirty the tree on each
+# invocation and make a real source change indistinguishable from a re-run; the workflow uploads
+# RESULTS.md as a build artifact, which is where a run's numbers are read from.
+#
+# `tools/validate-moc2/RESULTS.md` is the exception and IS committed: it is the M3 release-notes
+# artifact the plan asks for, so it is written by hand from a run rather than rewritten by one.
 /tools/corpus/report.json
 /tools/corpus/RESULTS.md
+/tools/validate-moc2/divergences.json

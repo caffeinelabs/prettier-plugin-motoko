@@ -65,15 +65,19 @@ export const PRELUDE_PREFIX = 'src/prelude/';
  * whether absence is fatal (moc-backed levels) or fine (tree-only levels).
  */
 export function mocCandidates() {
-    const out = [];
     const release = process.env.MOC ?? '/tmp/mocnow/moc';
     const source =
         process.env.MOC_SOURCE ?? `${MOTOKO_REPO}/_build/default/exes/moc.exe`;
-    out.push({ name: 'moc (release beta)', path: release, kind: 'release' });
-    out.push({
-        name: 'moc (built from pinned head)',
-        path: source,
-        kind: 'source',
-    });
-    return out;
+    const source6385 =
+        process.env.MOC6385_SRC ??
+        '/tmp/moc6385/src/_build/default/exes/moc.exe';
+    return [
+        { name: 'moc (built from pinned head)', path: source, kind: 'source' },
+        {
+            name: 'moc (built from pinned head, external checkout)',
+            path: source6385,
+            kind: 'source',
+        },
+        { name: 'moc (release beta)', path: release, kind: 'release' },
+    ];
 }
