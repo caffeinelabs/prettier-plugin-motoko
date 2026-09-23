@@ -214,6 +214,22 @@ word-boundary `case` match to avoid the false positives inside comments/strings 
 needs the `;`" but does not prove acceptance — a corpus can simply never have exercised
 the other spelling.
 
+**At which level are the two spellings "equal"?** §3 above and `preserve`'s runtime guard
+answer this differently, and both are right — they compare different things. Measured
+(`.probe/_switchsemi5.mts`, `.probe/_switchsemi6.mts`) on both the braced and the bare pair:
+
+| level                                | braced pair      | bare pair        |
+| ------------------------------------ | ---------------- | ---------------- |
+| named nodes (`case`, `block_exp`, …) | 19 vs 19 — equal | 15 vs 15 — equal |
+| anonymous tokens                     | 10 vs 9 — differ | 6 vs 5 — differ  |
+
+So "the tree" is equal and "the token stream" is not, with the entire difference being
+the one `;`. Dropping it is therefore semantically inert in the moc sense **and** a real
+change to the token stream. This matters because **`preserve`'s guard works at the token
+level** (`verify.ts` compares `shapeOf`, whose leaves include anonymous tokens): it cannot
+implement `moc2`'s drop, which is why that drop is a `moc2`-only edit and why the guard is
+told about it there rather than tolerating it here.
+
 **tree-sitter is more permissive than moc 1.16.1 here.** Probe case
 `case-semi-fully-optional-in-ts` shows tree-sitter 0.2.0 accepts two **bare** arms with
 **no** `;` between them and normalises the tree equal to the `;`-present spelling

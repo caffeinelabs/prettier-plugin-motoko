@@ -168,6 +168,45 @@ syntax mode (see the table). moc's own grammar states the reason:
 > The `;` between cases is optional: every case starts with the `case` keyword,
 > so the separator disambiguates nothing.
 
+### Read this table as the `moc2` target
+
+The decision table below is the **`moc2`** rule, and every "`ifBreak`",
+"`trailingComma`", and "`semi`" cell in it is **inert under `preserve`**. It is
+kept here because it is the specification `moc2` implements, and because the
+mechanics it names are what `docs/semicolons.md` analyses.
+
+`preserve` cannot implement those cells, and the reason is not a preference: the
+runtime guard compares the printed token stream against the tree the printer was
+given, and **a separator is a token**. So a `;` the printer adds or removes is a
+difference the guard must reject — `verify.ts`'s tolerance list is empty on
+purpose. What `preserve` prints is therefore _the source's own separators_,
+which is strictly weaker than the table:
+
+- **Between items** the two rules coincide, and that is provable rather than
+  fortunate: the grammar _requires_ a separator there. `{ a = 1 b = 2 }` and
+  `module M { let a = 1 let b = 2 }` both fail to parse (`Unexpected input`),
+  so a source that parses at all already has the `;` the table asks for, and
+  "preserve it" and "always print it" are the same rule.
+- **After the last item** they diverge, because the trailing `;` is genuinely
+  optional: `{ a = 1; }` has four children where `{ a = 1 }` has three. That is
+  the whole reason `trailingSeparator` reproduces the source instead of
+  computing the table's cell.
+- **`comma_sep` is not a separator question at all.** `(1 2)` and `[1 2]` do not
+  fail — they parse as a _call_ and as an _index_. So in that family the space
+  is not a style choice the printer may make; removing it or adding it changes
+  which construct the source denotes, and `README`'s adjacency rules apply
+  (`docs/adjacency.md`). The table's `,` row describes the case where the source
+  _did_ write the comma.
+- **Switch arms.** Between arms there is never a `;` — `case` ends the previous
+  arm. After an arm, `preserve` keeps whatever the source had. This is not a
+  no-op relative to `moc2`: the `;` is a real token in the tree, and
+  `switch x { case 1 { a }; case 2 { b } }` and its `;`-free form have different
+  shapes (measured — `.probe/_switchsemi.mts`). So `moc2`'s dropping it is a
+  real edit that the guard is told about, not an invisible one.
+
+`docs/semicolons.md` §2 carries the empirical work behind this section, and the
+child-count table there is the measurement `trailingSeparator` is built from.
+
 ### Decision table
 
 | construct                            | between items | after last item, one line | after last item, broken           | separator node               |
@@ -289,17 +328,28 @@ module class ExchangeRate(baseRate : Float) {
 
 ### Interaction with the ported fixture expectations
 
-The existing expectations in `tests/formatter.test.ts` are all consistent with
-the table and should stay:
+The existing expectations in `tests/legacy/formatter.test.ts` are the **`moc2`**
+behaviour, and they are the specification for M3 rather than a gate on this
+printer. They are not run (`tests/legacy/README.md`). Two of them would fail
+against `preserve` by construction, and that is expected rather than a defect:
+
+- `format('{\n}')` → `'{};\n'`. The `;` here is the table's _broken → `;`_ cell,
+  i.e. the `ifBreak` this printer does not emit; `preserve` prints `{}` alone.
+- `format('{\n}\nA\n')` → `'{};\nA;\n'`: the `;`s are again added, not preserved.
+
+Where the table and `preserve` agree — the between-items case — the expectations
+hold as written, because the source already had the separator. The others are
+restated here with the cell they exercise, so the port is a matter of naming
+rather than re-deriving:
 
 - `format('{\n\n}')` → `'{\n\n};\n'`. An empty block written across lines keeps
-  its one blank line and, being broken, takes the trailing `;`. `format('{\n}')`
-  → `'{};\n'` because the group fits on one line.
-- `format('{\n}\nA\n')` → `'{};\nA;\n'` — a file is a `semi_sep` list, so both
-  top-level items get `;` when the file is a sequence of statements.
+  its one blank line, and _being broken_ takes the trailing `;`. `preserve`
+  keeps the blank line (the empty-list branch in `listDoc`) and omits the `;`.
 - Tuples: `'(\n  a,\n  b,\n  c,\n)'` with a trailing comma by default, and the
-  comma dropped under `trailingComma: 'none'`. The trailing `;` of an enclosing
-  block disappears under `semi: false`.
+  comma dropped under `trailingComma: 'none'`. Both are the _broken → `,` if
+  `trailingComma != "none"`_ cell; `preserve` prints whichever the source had.
+  The trailing `;` of an enclosing block disappears under `semi: false` — a
+  `moc2` cell again.
 
 ## Blocks, records, object types: one line vs broken
 
