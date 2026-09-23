@@ -51,6 +51,7 @@ import type {
     NormalToken,
 } from '../parser/normalize.ts';
 import type { NodeKind } from '../parser/nodes.generated.ts';
+import { glue } from './adjacency.ts';
 
 const { hardline, line, softline, indent, join } = doc.builders;
 const { willBreak } = doc.utils;
@@ -79,6 +80,31 @@ export interface ListDescriptor {
      * than guessed. A brace list is `{ a = 1; b = 2 }`; a paren list is `(1, 2)`.
      */
     spaced: boolean;
+    /**
+     * Whether the closing delimiter must be glued to the last item's last token — never preceded by
+     * a break of any kind, not even a `softline` that flattens to nothing.
+     *
+     * Set for the two angle families, and it is a **correctness** rule rather than a layout taste.
+     * moc's lexer emits `GTOP` for a `>` that has whitespace on both sides (`| Parser.GT when
+     * leading_ws () && trailing_ws () -> Parser.GTOP`), so a `>` that has been pushed onto its own
+     * line stops being a closing angle bracket:
+     *
+     *     type F<
+     *       A
+     *     > = A;          syntax error [M0001], unexpected token '>'
+     *
+     * This is a syntax error on **every** moc from 0.16.3 through 2.0.0-beta.1, and — this is the
+     * part that makes it worth a descriptor field — the runtime guard **cannot see it**, because
+     * tree-sitter reads the broken form as the same tree. So there is no gate behind the printer
+     * here; this flag is the only thing standing between an author and an unparseable file.
+     * `.probe/_angles2.mts` and `.probe/_angles4.mts` are the measurements.
+     *
+     * The seam is one-sided, which is why it is a flag on the descriptor and not a `glue()` around
+     * the whole list: breaking *after* the opening `<` is accepted on all three compilers
+     * (`type F<\n  A,\n  B> = A;`), so only the close is glued. The opening `<` needs no rule of
+     * its own precisely because it is always safe.
+     */
+    closeGlued?: boolean;
 }
 
 /**
@@ -107,8 +133,20 @@ const LISTS: Partial<Record<NodeKind, ListDescriptor>> = {
     array_exp: { family: 'comma_sep', open: '[', close: ']', spaced: false },
     tup_typ: { family: 'comma_sep', open: '(', close: ')', spaced: false },
     tup_pat: { family: 'comma_sep', open: '(', close: ')', spaced: false },
-    typ_params: { family: 'comma_sep', open: '<', close: '>', spaced: false },
-    inst: { family: 'comma_sep', open: '<', close: '>', spaced: false },
+    typ_params: {
+        family: 'comma_sep',
+        open: '<',
+        close: '>',
+        spaced: false,
+        closeGlued: true,
+    },
+    inst: {
+        family: 'comma_sep',
+        open: '<',
+        close: '>',
+        spaced: false,
+        closeGlued: true,
+    },
 };
 
 /**
@@ -437,9 +475,16 @@ export function innerBreak(list: ListDescriptor): Doc {
  * Returned as a single doc so that a caller cannot pair the opening break with a different closing
  * one — a list whose left edge breaks while its right edge does not is a layout no fixture wants and
  * no reader would think to look for.
+ *
+ * The one exception is `closeGlued`, and it is not an exception to the pairing rule but to the
+ * break: the closing side gets **no break at all**, so the `>` stays attached to the last item. The
+ * opening break is untouched, because it is always safe. See the descriptor field for why this is a
+ * correctness requirement and not a style preference, and `.probe/_angles2.mts` for the output that
+ * this function used to produce (which no moc accepts).
  */
 export function listIndent(joined: Doc, list: ListDescriptor): Doc {
     const b = innerBreak(list);
+    if (list.closeGlued) return [indent([b, joined]), glue()];
     return [indent([b, joined]), b];
 }
 

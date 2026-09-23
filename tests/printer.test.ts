@@ -33,6 +33,7 @@ import prettier from 'prettier';
 import plugin from '../src/index.ts';
 import { parse } from '../src/parser/parse.ts';
 import { shapeOf } from '../src/parser/normalize.ts';
+import type { NormalChild, NormalNode } from '../src/parser/normalize.ts';
 import { compareShapes } from '../src/verify.ts';
 
 /** The options every case below runs under, spelled once so no case can quietly use defaults. */
@@ -427,6 +428,143 @@ describe('preserve: idempotence and options', () => {
         expect(await format(source, { printWidth: 20 })).toBe(
             'let r = {\n  aaaa = 1;\n  bbbb = 2\n}\n',
         );
+    });
+});
+
+/**
+ * The angle close, which is the one seam in the whole printer that no gate watches.
+ *
+ * `typ_params` and `inst` are comma-separated lists like any other, so the obvious spelling is the
+ * one every other family uses: break after the `<`, indent, and break before the `>`. moc's lexer
+ * does not accept that:
+ *
+ *     | Parser.GT when leading_ws () && trailing_ws () -> Parser.GTOP
+ *
+ * A `>` with whitespace on **both** sides lexes as the greater-than *operator*, so a close-angle
+ * pushed onto its own line stops being a close-angle:
+ *
+ *     type F<
+ *       A,
+ *       B
+ *     > = A;          syntax error [M0001], unexpected token '>'
+ *
+ * That is a syntax error on every moc from 0.16.3 through 2.0.0-beta.1, and it is the reason
+ * `ListDescriptor.closeGlued` exists. What makes the flag load-bearing rather than defensive is the
+ * next paragraph: **no test here can catch the regression it prevents.** `shapeOf` projects
+ * `typ_params` and `inst` by node text, so the glued and broken spellings project to the same shape
+ * and `compareShapes` returns `null` — the runtime guard, which is the printer's only automatic
+ * correctness check, is blind to this. The corpus run is blind for the same reason, and idempotence
+ * is satisfied trivially on the broken output, because formatting it again reproduces it. The
+ * assertions below therefore do not check a *rule*; they check the *output*, because output is the
+ * only place this defect is visible.
+ *
+ * The seam is one-sided, which is why the flag is a flag and not a `glue()` around the whole list:
+ * breaking after the opening `<` is accepted by every compiler tested, so only the close is glued.
+ */
+describe('preserve: the angle close', () => {
+    /** Every `typ_params`/`inst` node printed as the last thing on its line, i.e. a detached `>`. */
+    function detachedCloses(root: NormalChild): string[] {
+        const bad: string[] = [];
+        const visit = (node: NormalChild): void => {
+            if (node.nodeType !== 'Branch') return;
+            if (
+                (node.kind === 'typ_params' || node.kind === 'inst') &&
+                /\s>$/.test(node.text)
+            )
+                bad.push(node.text);
+            for (const child of node.children) visit(child);
+        };
+        visit(root);
+        return bad;
+    }
+
+    // The measured defect, at the narrowest width that produces it. The `>` sits on the last
+    // parameter's line — `Gamma>`, not a line of its own.
+    test('a broken angle list glues the close to the last item', async () => {
+        const printed = await format('type F<Alpha, Beta, Gamma> = Alpha;', {
+            printWidth: 20,
+        });
+        expect(printed).toBe('type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;\n');
+    });
+
+    // The same rule in `inst`, reached through an expression rather than a type alias. `inst` also
+    // carries the close, so a fix attached to `typ_params` alone would leave this one broken.
+    test('an instantiation list glues its close too', async () => {
+        const printed = await format(
+            'type L = List<List<Nat>>;\nlet x = L.make<Alpha, Beta>();',
+            { printWidth: 20 },
+        );
+        expect(printed).toMatch(/Beta>\(\)/);
+        expect(printed).not.toMatch(/\n\s*>/);
+    });
+
+    // The nested seam, L5 in `docs/adjacency.md`: when the last parameter ends in `>`, the close
+    // makes a contiguous `>>`, and the glued close is what keeps it contiguous. A single-item nested
+    // list is not a case for this — an angle list of one item never breaks — so the discriminator has
+    // to be a *bound*, which is the only way an inner `>` reaches the end of a multi-item angle list.
+    // Without the glue this prints `B <: List<Nat>\n>()`: the pair splits and the outer close lands on
+    // its own line, so the case fails for two reasons at once rather than by a whitespace whisker.
+    test('a nested close is a contiguous `>>`', async () => {
+        const printed = await format(
+            'func f<Alpha, Beta <: List<Nat>>(a : Alpha) : Beta = a;',
+            { printWidth: 20 },
+        );
+        expect(printed).toBe(
+            'func f<\n  Alpha,\n  Beta <: List<Nat>>(\n  a : Alpha\n) : Beta = a;\n',
+        );
+    });
+
+    // The general form, over real code rather than the strings above: nothing the printer emits may
+    // end a line inside a `typ_params` or `inst`. This is the assertion that would have caught the
+    // defect on the corpus, where it was found, and it is written against the CST so it cannot be
+    // satisfied by a stray `>` in a comparison expression — those are preserved verbatim from the
+    // source and are not list closes.
+    //
+    // The sources are drawn from the constructs that actually carry the two kinds, which is narrower
+    // than it looks: a type *application* like `Map<Text, List<Nat>>` is a `path_typ` and is copied
+    // verbatim, so it can never detach a close and would make this test look broader than it is. The
+    // coverage assertion below is what keeps a source that reaches nothing from passing quietly.
+    test('no printed angle list anywhere ends a line before its `>`', async () => {
+        const sources = [
+            'type F<Alpha, Beta, Gamma> = Alpha;',
+            'func f<Alpha, Beta, Gamma <: List<Nat>>(a : Alpha) : Beta = a;',
+            'class C<Alpha, Beta>(a : Alpha) { public let b : Beta; };',
+            'let x = f<Alpha, Beta, Gamma>();',
+        ];
+        for (const source of sources) {
+            let reached = 0;
+            for (const printWidth of [80, 40, 20, 10]) {
+                const printed = await format(source, { printWidth });
+                const { root } = await parse(printed);
+                const visit = (node: NormalChild): void => {
+                    if (node.nodeType !== 'Branch') return;
+                    if (node.kind === 'typ_params' || node.kind === 'inst')
+                        reached += 1;
+                    for (const child of node.children) visit(child);
+                };
+                visit(root);
+                expect(
+                    detachedCloses(root),
+                    `detached close at printWidth ${printWidth}: ${JSON.stringify(source)}\n${printed}`,
+                ).toEqual([]);
+            }
+            expect(
+                reached,
+                `no angle list was reached, so this source proves nothing: ${JSON.stringify(source)}`,
+            ).toBeGreaterThan(0);
+        }
+    });
+
+    // The blindness above, asserted rather than asserted-about. It is written as a test because it is
+    // the premise the whole group rests on: if `shapeOf` ever starts distinguishing these, the guard
+    // gains a real check here and this test fails *loudly* — which is the correct outcome, since the
+    // group would then be belt-and-braces rather than the only cover.
+    test('the runtime guard cannot see the difference — the reason these are output assertions', async () => {
+        const glued = shapeOf((await parse('type F<A, B> = A;\n')).root);
+        const broken = shapeOf(
+            (await parse('type F<\n  A,\n  B\n> = A;\n')).root,
+        );
+        expect(compareShapes(glued, broken)).toBeNull();
     });
 });
 
