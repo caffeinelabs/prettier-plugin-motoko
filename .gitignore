@@ -2,3 +2,20 @@ node_modules/
 target/
 
 /lib/
+
+# Printing a tree as raw text writes a temporary artifact into the tree, and a debugging session
+# leaves one behind per run — 149 accumulated at the repo root during the M1 spike before anyone
+# noticed, at ~197 KB each. They are unreferenced by any code and are not the grammar: the grammar
+# this plugin loads is the vendored `src/parser/tree-sitter-motoko.wasm`, which is committed and
+# must stay that way. Scoped to the root so it cannot swallow a real artifact under `src/`.
+/*.wasm
+
+# Untracked scratch space (mirrors .prettierignore). Neither is committed, so neither should show
+# up as noise in `git status` while the M1/M2 specs are being written.
+/.probe/
+
+# The corpus harness's own output. Every run rewrites both, so committing them would dirty the
+# tree on each invocation and make a real source change indistinguishable from a re-run. The
+# workflow uploads RESULTS.md as a build artifact, which is where a run's numbers are read from.
+/tools/corpus/report.json
+/tools/corpus/RESULTS.md

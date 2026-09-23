@@ -1,0 +1,119 @@
+# The corpus harness (docs/formatter-rework.md, "Verification" item 3 and M1's exit criterion).
+#
+# Why this is not in tests.yml:
+#   - It is measured in minutes, not seconds, and it fails for reasons that are not the PR's
+#     fault (an upstream corpus moved, a new grammar deviation). Blocking every PR on it would
+#     train people to ignore it.
+#   - M1 exits with the corpus green on every unit it can reach, with the unreachable units
+#     counted and listed, so during M1 this job is a report generator as much as a gate.
+#
+# The harness contract (reconciled against the landed `tools/corpus/run.mjs` — `--help` exit 0,
+# and every flag this workflow passes was checked against its usage text):
+#     --job all                        all | parse | fences
+#     --motoko-rev <rev>               applies to the compiler repo only; sibling package sets are
+#                                      read at their own default branch, and the resolved commit is
+#                                      recorded either way
+#     --oracle-rev <rev>               accepted and recorded for provenance, but a NO-OP today: the
+#                                      moc AST-oracle layer is not implemented. Harmless to pass, and
+#                                      keeping it means the flag is already wired when the layer lands.
+#     --report <path>                  markdown, as assumed
+#   CORPUS_MOTOKO_REV / CORPUS_ORACLE_REV are also passed as env vars as a convenience; the flags
+#   are the contract. If the harness ever takes a revision some other way, CHANGE THIS FILE to
+#   match rather than adding a second way to say the same thing.
+#
+#   The "Verify the harness contract" step below still runs the harness's real `--help` on every
+#   invocation. It is now a drift detector rather than a first-contact check: if the harness's CLI
+#   changes out from under this file, that step fails with the new usage text instead of letting a
+#   mid-run "unknown option" surface as a corpus failure.
+#
+#   Two shape notes worth knowing when reading a run:
+#     - Exit code is 0 when nothing crashed and no unit failed the checks that CAN run. Units the
+#       grammar rejects are counted and listed but are NOT a failure — they are expected, and
+#       docs/grammar-deviations.md is where each one is justified. So green here does not mean
+#       "100% of the corpus parses"; it means "no regressions against the known deviation set".
+#     - `--repos` defaults to this repo's parent, so on a bare runner the sibling package sets are
+#       simply absent rather than an error, and the report says which units were unreachable.
+name: Corpus
+
+on:
+    schedule:
+        # 02:41 UTC daily. Off the hour and off :30 so this does not pile onto the same minute as
+        # every other scheduled job.
+        - cron: '41 2 * * *'
+    workflow_dispatch:
+        inputs:
+            motoko-rev:
+                description: 'caffeinelabs/motoko revision to check'
+                required: false
+                type: string
+                default: master
+            oracle-rev:
+                description: 'moc AST-oracle revision, or empty for the same as motoko-rev'
+                required: false
+                type: string
+                default: ''
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    # A nightly run should not be killed by a manual dispatch on the same ref; only superseded
+    # manual runs are cancelled.
+    cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+
+permissions:
+    contents: read
+
+jobs:
+    corpus:
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22.x
+                  cache: 'npm'
+            - run: npm ci
+
+            # The corpus is the compiler's own test suite plus the grammar's packaged examples
+            # (docs/formatter-rework.md: "../motoko/test, motoko-core, the grammar's
+            # test/packages.json set"). It is fetched by the harness, not by this workflow, so the
+            # pins live in one place -- the harness -- and can be re-pinned on purpose. Clone URL,
+            # org and branch names below are the harness's business; this workflow only supplies
+            # the revision.
+            - name: Verify the harness contract
+              run: |
+                  if [ ! -f tools/corpus/run.mjs ]; then
+                    echo "::error title=corpus harness missing::tools/corpus/run.mjs does not exist. Either the harness was moved or this workflow is checking out a revision that predates it."
+                    exit 1
+                  fi
+                  echo "--- tools/corpus/run.mjs --help ---"
+                  node tools/corpus/run.mjs --help || {
+                    echo "::error title=corpus harness contract mismatch::tools/corpus/run.mjs did not accept --help or exited non-zero. Its CLI has drifted from what this workflow passes; reconcile the two before the scheduled run."
+                    exit 1
+                  }
+
+            - name: Run the corpus checks
+              env:
+                  # On `schedule` there is no `inputs` context, so `inputs.motoko-rev` is empty
+                  # rather than the declared default -- hence the explicit fallback here.
+                  CORPUS_MOTOKO_REV: ${{ inputs.motoko-rev || 'master' }}
+                  # Default to the motoko pin when the caller does not name a separate oracle.
+                  CORPUS_ORACLE_REV: ${{ inputs.oracle-rev || inputs.motoko-rev || 'master' }}
+              run: |
+                  node tools/corpus/run.mjs \
+                    --job all \
+                    --motoko-rev "$CORPUS_MOTOKO_REV" \
+                    --oracle-rev "$CORPUS_ORACLE_REV" \
+                    --report tools/corpus/RESULTS.md
+
+            # The runner is about to be thrown away, so an artifact is the only way to read the
+            # report. It also publishes the report on green runs, which is where the M1 exit
+            # number (96.4% as of 2026-09-23) and the unreachable-unit list get tracked over time.
+            - name: Upload the corpus report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: corpus-report
+                  path: tools/corpus/RESULTS.md
+                  if-no-files-found: warn

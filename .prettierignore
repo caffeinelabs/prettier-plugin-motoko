@@ -10,5 +10,16 @@
 # Lockfiles are owned by npm, not by this project's style
 package-lock.json
 
+# Untracked scratch space. `.probe/` holds the one-off scripts and JSON dumps the M1/M2 specs were
+# derived from; `.claude/` holds local agent config and worktrees. Neither is committed, so neither
+# should be able to fail `format:check` in CI.
+/.probe/
+/.claude/
+
+# The corpus harness's own output, rewritten by every run (mirrors .gitignore). `npm run
+# format:check` gates CI, so a generated file that churns per run must not be able to fail it.
+/tools/corpus/report.json
+/tools/corpus/RESULTS.md
+
 # Machine-generated zero-width character table (~1.5k lines, reformatting it is pure churn)
 src/utils/removeZeroWidthCharacters.json

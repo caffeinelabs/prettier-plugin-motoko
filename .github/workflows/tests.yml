@@ -1,3 +1,20 @@
+# CI for the tree-sitter engine (M1 onward).
+#
+# What changed from the old workflow, and why:
+#   - No Rust toolchain, no wasm-pack, no `Swatinem/rust-cache`. The Rust crate is gone
+#     (docs/formatter-rework.md, "Tooling reset"); the grammar wasm ships vendored in
+#     src/parser/ and the grammar itself is pinned exactly in package.json.
+#   - No `git clone https://github.com/dfinity/motoko ../motoko`. That clone existed for a
+#     compiler test that was already skipped, and it fetched from the wrong org. Anything that
+#     needs the compiler corpus lives in corpus.yml and points at caffeinelabs/motoko with an
+#     explicit revision.
+#   - Jest/ts-jest are gone; `npm test` runs Vitest.
+#   - `gen:node-types:check` is part of CI: a grammar bump that changes node-types.json is only
+#     caught if the generated union is regenerated in the same commit.
+#
+# Action pinning follows the convention that is actually on main: version tags. The
+# chore/pin-actions-to-sha branch is unmerged and stale (it still has the Rust and ../motoko
+# steps); if it ever lands, pin these refs to SHAs then.
 name: Tests
 
 on:
@@ -15,7 +32,29 @@ permissions:
     contents: read
 
 jobs:
-    build:
+    # File-level checks: they read sources, not the runtime, so their result cannot depend on the
+    # Node version. They run once on 22.x instead of under the matrix.
+    static:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22.x
+                  cache: 'npm'
+            - run: npm ci
+            # The repo formats itself with the Prettier it devDepends on; this gates the repo's
+            # own style (4-space indent, single quotes, semicolons, trailing commas).
+            - run: npm run format:check
+            # The generated-types rule. tools/gen-node-types.ts regenerates
+            # src/parser/nodes.generated.ts from the pinned grammar's node-types.json; --check
+            # fails when the file on disk differs. Without this, a grammar bump silently
+            # invalidates the printer's exhaustive switch. Resolves the grammar through the
+            # devDependency, so tree-sitter-motoko must be installed (it is a devDependency).
+            - run: npm run gen:node-types:check
+
+    typecheck:
         runs-on: ubuntu-latest
 
         strategy:
@@ -25,50 +64,108 @@ jobs:
 
         steps:
             - uses: actions/checkout@v7
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v7
+            - uses: actions/setup-node@v7
               with:
                   node-version: ${{ matrix.node-version }}
                   cache: 'npm'
-            - uses: Swatinem/rust-cache@v2
-              with:
-                  workspaces: wasm
-            - run: git clone https://github.com/dfinity/motoko.git ../motoko --depth 1
             - run: npm ci
-            - run: npm run build --if-present
             - run: npm run typecheck
-            - run: npm run format:check
-            - run: npm test
 
-    # The web entry point (src/environments/web.ts) shares almost no code path with
-    # the Node one, and was previously not built anywhere in CI.
-    webapp:
+    test:
         runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [22.x, 24.x]
 
         steps:
             - uses: actions/checkout@v7
             - uses: actions/setup-node@v7
               with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
+            - run: npm ci
+            # Vitest runs the TypeScript sources directly; no build step is needed first.
+            - run: npm test
+
+    # The web entry point shares almost no code path with the Node one, and a bundle-only check
+    # does not prove the plugin can load web-tree-sitter plus the grammar wasm in a browser and
+    # format with them. The plan requires both: "a Vite build AND format a snippet in a headless
+    # browser, instead of only building".
+    #
+    # M1 CANNOT PASS THAT CHECK: the plugin has no printer until M2, so the browser format step
+    # cannot succeed. Rather than write a job that reports success by skipping its work, the real
+    # check is gated on the repository variable WEB_E2E_ENABLED. While the variable is unset or
+    # not 'true', this job still runs, emits a warning annotation and a job summary stating that
+    # web e2e did NOT run, and verifies nothing. It is deliberately honest about being a no-op
+    # rather than silently green.
+    #
+    # M2 turns this on: set the repository variable WEB_E2E_ENABLED=true (Settings -> Secrets and
+    # variables -> Actions -> Variables) in the same PR that makes the browser format step pass.
+    web:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Read the WEB_E2E_ENABLED gate
+              id: gate
+              run: |
+                  if [ "${{ vars.WEB_E2E_ENABLED }}" = "true" ]; then
+                    echo "enabled=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "enabled=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Web e2e is NOT RUN (WEB_E2E_ENABLED is not 'true')
+              if: steps.gate.outputs.enabled != 'true'
+              run: |
+                  echo "::warning title=web e2e not run::vars.WEB_E2E_ENABLED is not 'true', so the Vite build and the headless-browser format check did NOT run. Nothing was verified by this job. M2 sets the variable once the printer lands."
+                  {
+                    echo '### Web end-to-end check: NOT RUN'
+                    echo ''
+                    echo "Repository variable \`WEB_E2E_ENABLED\` is not \`'true'\`, so this job did **not** build the web app and did **not** format a snippet in a headless browser. It verified nothing."
+                    echo ''
+                    echo 'M2 enables it by setting `WEB_E2E_ENABLED=true`.'
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - uses: actions/checkout@v7
+              if: steps.gate.outputs.enabled == 'true'
+            - uses: actions/setup-node@v7
+              if: steps.gate.outputs.enabled == 'true'
+              with:
                   node-version: 22.x
                   cache: 'npm'
-            - uses: Swatinem/rust-cache@v2
-              with:
-                  workspaces: wasm
-            - run: npm ci
-            # test-webapp resolves the plugin through a local file: dependency, so
-            # the bundler target the web entry imports has to exist, and lib/ built.
-            - run: npm run build
-            - name: Build test-webapp
+            - if: steps.gate.outputs.enabled == 'true'
+              run: npm ci
+            # tests/test-webapp resolves the plugin through a local file: dependency, so the
+            # plugin has to be built (lib/ plus the vendored wasm) before the Vite build runs.
+            - if: steps.gate.outputs.enabled == 'true'
+              run: npm run build
+            - name: Vite build
+              if: steps.gate.outputs.enabled == 'true'
               working-directory: tests/test-webapp
               run: |
                   npm ci
                   npm run build
+            # INTEGRATION TODO (unverified, confirm before enabling the gate):
+            #   - `test:web` is the script name the plan uses for this job ("CI (Node 22/24) runs
+            #     typecheck, format:check, test, test:web and corpus"), but no such script exists
+            #     yet. Confirm the name, and the harness path (proposed: tests/web-e2e/, which
+            #     this step assumes nothing about), with whoever lands the browser harness.
+            #   - The M0 headless-browser probe lives in .probe/ and is scratch, not a CI
+            #     harness; do not point this step at it.
+            #   - A headless browser runtime (Playwright or equivalent) has to exist in the
+            #     harness; installing it is that harness's job, not this workflow's.
+            - name: Format a snippet in a headless browser
+              if: steps.gate.outputs.enabled == 'true'
+              run: npm run test:web
 
+    # Single required check for branch protection, so adding or renaming a job does not need a
+    # settings change. It fails if any dependency failed or was cancelled.
     required:
         name: ci:required
         runs-on: ubuntu-latest
         if: always()
-        needs: [build, webapp]
+        needs: [static, typecheck, test, web]
         steps:
             - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
               run: exit 1

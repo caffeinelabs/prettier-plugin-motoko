@@ -1,21 +1,28 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
-        "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true,
-        "target": "esnext",
-        "noImplicitAny": true,
-        "moduleResolution": "bundler",
-        "sourceMap": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "target": "es2023",
+        "lib": ["es2023"],
+        "types": ["node"],
+        "rootDir": "src",
+        "outDir": "lib",
         "declaration": true,
         "declarationMap": true,
+        "sourceMap": true,
         "allowJs": false,
         "strict": true,
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
-        "rootDir": "src",
-        "outDir": "lib",
-        "declarationDir": "lib"
+        "verbatimModuleSyntax": true,
+        "skipLibCheck": true,
+        // The parser tree imports its siblings with explicit `.ts` specifiers (the spelling Node's
+        // `--experimental-strip-types` needs to resolve them straight from source). `allowImportingTsExtensions`
+        // accepts that spelling and `rewriteRelativeImportExtensions` rewrites it to `.js` on emit, so
+        // the built output still resolves under plain Node ESM. Both are required together:
+        // `allowImportingTsExtensions` alone is a no-emit-only option.
+        "allowImportingTsExtensions": true,
+        "rewriteRelativeImportExtensions": true
     },
     "include": ["src"]
 }
