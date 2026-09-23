@@ -8,7 +8,8 @@ on:
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+    # Only superseded PR pushes are cancelled; every commit on main gets a full run
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
     contents: read
@@ -30,6 +31,8 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: 'npm'
             - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: wasm
             - run: git clone https://github.com/dfinity/motoko.git ../motoko --depth 1
             - run: npm ci
             - run: npm run build --if-present
@@ -49,6 +52,8 @@ jobs:
                   node-version: 22.x
                   cache: 'npm'
             - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: wasm
             - run: npm ci
             # test-webapp resolves the plugin through a local file: dependency, so
             # the bundler target the web entry imports has to exist, and lib/ built.
