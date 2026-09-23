@@ -63,3 +63,15 @@ jobs:
               run: |
                   npm ci
                   npm run build
+
+    # Single required context for branch protection. Matching the ruleset to the
+    # individual job names means a job rename silently drops the gate, so the
+    # ruleset requires this job and this job requires every other job.
+    required:
+        name: ci:required
+        runs-on: ubuntu-latest
+        if: always()
+        needs: [build, webapp]
+        steps:
+            - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+              run: exit 1
