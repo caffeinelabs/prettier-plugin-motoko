@@ -63,3 +63,12 @@ jobs:
               run: |
                   npm ci
                   npm run build
+
+    required:
+        name: ci:required
+        runs-on: ubuntu-latest
+        if: always()
+        needs: [build, webapp]
+        steps:
+            - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+              run: exit 1
