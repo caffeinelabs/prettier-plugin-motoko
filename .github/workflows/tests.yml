@@ -1,34 +1,65 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
 name: Tests
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    push:
+        branches: ['main']
+    pull_request:
+        branches: ['main']
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    # Only superseded PR pushes are cancelled; every commit on main gets a full run
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+    contents: read
 
 jobs:
-  build:
+    build:
+        runs-on: ubuntu-latest
 
-    runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [22.x, 24.x]
+                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        steps:
+            - uses: actions/checkout@v7
+            - name: Use Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v7
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: wasm
+            - run: git clone https://github.com/dfinity/motoko.git ../motoko --depth 1
+            - run: npm ci
+            - run: npm run build --if-present
+            - run: npm run typecheck
+            - run: npm run format:check
+            - run: npm test
 
-    steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - uses: Swatinem/rust-cache@v2
-    - run: git clone https://github.com/dfinity/motoko.git ../motoko --depth 1
-    - run: npm ci
-    - run: npm i prettier
-    - run: npm run build --if-present
-    - run: npm test
+    # The web entry point (src/environments/web.ts) shares almost no code path with
+    # the Node one, and was previously not built anywhere in CI.
+    webapp:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22.x
+                  cache: 'npm'
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: wasm
+            - run: npm ci
+            # test-webapp resolves the plugin through a local file: dependency, so
+            # the bundler target the web entry imports has to exist, and lib/ built.
+            - run: npm run build
+            - name: Build test-webapp
+              working-directory: tests/test-webapp
+              run: |
+                  npm ci
+                  npm run build

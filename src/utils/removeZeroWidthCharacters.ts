@@ -22,6 +22,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import charConfigs from './removeZeroWidthCharacters.json';
+
 interface CharConfig {
     actualUnicodeChar: string;
     aka: string;
@@ -38,7 +40,8 @@ interface CharConfig {
     replaceWith?: string;
 }
 
-const data = require('./removeZeroWidthCharacters.json') as CharConfig[];
+// A static import (not `require`) so ESM bundlers consuming `src/` can resolve it
+const data = charConfigs as CharConfig[];
 
 const byCode = data.reduce(
     (h, obj) => {

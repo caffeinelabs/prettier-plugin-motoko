@@ -1,81 +1,55 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - packages/mo-fmt/package.json
-    
-  workflow_dispatch:
+    push:
+        branches:
+            - main
+        paths:
+            - packages/mo-fmt/package.json
+
+    workflow_dispatch:
 
 jobs:
-  tag-release:
-    name: Create release tag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - id: create-tag
-        run: RELEASE_TAG=v$(node -e "console.log(require('./packages/mo-fmt/package.json').version)") && git tag $RELEASE_TAG && git push origin $RELEASE_TAG
-        continue-on-error: true
-    outputs:
-      tag-outcome: ${{ steps.create-tag.outcome }}
-  
-  release:
-    name: Release mo-fmt
-    needs: [tag-release]
-    if: needs.tag-release.outputs.tag-outcome == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16.x
-          cache: 'npm'
-      - run: npm --prefix packages/mo-fmt ci
-      - run: npm --prefix packages/mo-fmt run package
-      - name: Get version
-        id: version
-        run: echo ::set-output\ name=TAG_NAME::v$(node -e "console.log(require('./packages/mo-fmt/package.json').version)")
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by GitHub Actions
-        with:
-          tag_name: ${{ steps.version.outputs.TAG_NAME }}
-          release_name: mo-fmt ${{ steps.version.outputs.TAG_NAME }}
-          body: Portable `mo-fmt` binaries for Linux, macOS, and Windows.
-          draft: false
-          prerelease: false
-      - name: Upload release (Linux)
-        id: upload-release-linux
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: packages/mo-fmt/pkg/mo-fmt-linux.tar.gz
-          asset_name: mo-fmt-linux.tar.gz
-          asset_content_type: application/octet-stream
-      - name: Upload release (macOS)
-        id: upload-release-macos
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: packages/mo-fmt/pkg/mo-fmt-macos.tar.gz
-          asset_name: mo-fmt-macos.tar.gz
-          asset_content_type: application/octet-stream
-      - name: Upload release (Windows)
-        id: upload-release-windows
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: packages/mo-fmt/pkg/mo-fmt-windows.zip
-          asset_name: mo-fmt-windows.zip
-          asset_content_type: application/octet-stream
+    tag-release:
+        name: Create release tag
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v7
+            - id: create-tag
+              run: RELEASE_TAG=v$(node -p 'require("./packages/mo-fmt/package.json").version') && git tag $RELEASE_TAG && git push origin $RELEASE_TAG
+              continue-on-error: true
+        outputs:
+            tag-outcome: ${{ steps.create-tag.outcome }}
+
+    release:
+        name: Release mo-fmt
+        needs: [tag-release]
+        if: needs.tag-release.outputs.tag-outcome == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v7
+            - name: Setup Node.js
+              uses: actions/setup-node@v7
+              with:
+                  # Pinned by the `pkg` packaging target (node16-*), see packages/mo-fmt.
+                  node-version: 16.x
+                  cache: 'npm'
+            - run: npm --prefix packages/mo-fmt ci
+            - run: npm --prefix packages/mo-fmt run package
+            - name: Get version
+              id: version
+              run: echo "TAG_NAME=v$(node -p 'require("./packages/mo-fmt/package.json").version')" >> "$GITHUB_OUTPUT"
+            - name: Create release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release create "${{ steps.version.outputs.TAG_NAME }}" \
+                    --title "mo-fmt ${{ steps.version.outputs.TAG_NAME }}" \
+                    --notes 'Portable `mo-fmt` binaries for Linux, macOS, and Windows.' \
+                    packages/mo-fmt/pkg/mo-fmt-linux.tar.gz \
+                    packages/mo-fmt/pkg/mo-fmt-macos.tar.gz \
+                    packages/mo-fmt/pkg/mo-fmt-windows.zip

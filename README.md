@@ -46,7 +46,7 @@ Add the following line to your config file:
 
 ```json
 {
-    "plugins": ["prettier-plugin-motoko"],
+    "plugins": ["prettier-plugin-motoko"]
 }
 ```
 
@@ -69,6 +69,7 @@ Add the following line to your config file:
 #### `motokoOrganizeImports` (default: `false`)
 
 Automatically organize and sort import statements. When enabled, imports are:
+
 - Grouped by prefix (`ic:`, `canister:`, `mo:`, and relative paths)
 - Sorted alphabetically within each group
 - Combined when importing from the same path
@@ -108,18 +109,20 @@ Remove extra blank lines at the beginning and end of code blocks.
 
 ## Multiple languages
 
-Prettier will apply the same configuration to Motoko, JavaScript, CSS, HTML, and any other supported languages. 
+Prettier will apply the same configuration to Motoko, JavaScript, CSS, HTML, and any other supported languages.
 
 You can specifically configure Motoko files using a [configuration override](https://prettier.io/docs/en/configuration.html#configuration-overrides) in your `.prettierrc` file:
 
 ```json
 {
-    "overrides": [{
-        "files": "*.mo",
-        "options": {
-            "bracketSpacing": true
+    "overrides": [
+        {
+            "files": "*.mo",
+            "options": {
+                "bracketSpacing": true
+            }
         }
-    }]
+    ]
 }
 ```
 
@@ -136,6 +139,6 @@ func formatted<B>(b : B) { b };
 
 ## Contributing
 
-Feel free to [submit a GitHub issue](https://github.com/dfinity/prettier-plugin-motoko/issues/new) to report a bug or suggest a feature. 
+Feel free to [submit a GitHub issue](https://github.com/dfinity/prettier-plugin-motoko/issues/new) to report a bug or suggest a feature.
 
-If you're interested in becoming an open-source contributor, be sure to check out the [open issues](https://github.com/dfinity/prettier-plugin-motoko/issues) in case anything catches your eye. 
+If you're interested in becoming an open-source contributor, be sure to check out the [open issues](https://github.com/dfinity/prettier-plugin-motoko/issues) in case anything catches your eye.
