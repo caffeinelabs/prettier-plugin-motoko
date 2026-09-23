@@ -35,8 +35,8 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v7
               with:
-                  # Pinned by the `pkg` packaging target (node16-*), see packages/mo-fmt.
-                  node-version: 16.x
+                  # @yao-pkg/pkg requires Node >= 22; packaging targets are node22-*, see packages/mo-fmt.
+                  node-version: 22.x
                   cache: 'npm'
             - run: npm --prefix packages/mo-fmt ci
             - run: npm --prefix packages/mo-fmt run package

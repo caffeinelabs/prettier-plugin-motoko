@@ -26,5 +26,5 @@ Building wasm requires the Rust toolchain and `wasm-pack`.
 - `wasm-bindgen` and `serde-wasm-bindgen` are pinned to exact versions in `wasm/Cargo.toml`; keep them in sync with the installed `wasm-pack`.
 - `.npmrc` sets `min-release-age=7`, so newly published dependency versions are held back for 7 days.
 - CI (`.github/workflows/tests.yml`) runs on Node 22 and 24, gates on `npm run typecheck` and `npm run format:check`, builds `tests/test-webapp` in a separate job, and clones `https://github.com/dfinity/motoko` into `../motoko` (a sibling of this repo) before testing. The compiler-suite test (currently skipped) reads Motoko test files from that path.
-- The release workflow still builds `mo-fmt` on Node 16, because the archived `pkg` packager targets `node16-*`. Keep `packages/mo-fmt` devDependencies Node-16-compatible until it moves to `@yao-pkg/pkg`.
+- The release workflow builds the standalone `mo-fmt` binaries on Node 22 with `@yao-pkg/pkg` (`node22-*` targets, host arch, so x64 in CI). The plugin's wasm uses reference types, which the embedded Node runtime must support; smoke-test a packaged binary on a `.mo` file (format and `--check`) when touching this path, not just that packaging exits 0.
 - Releases are triggered only by changes to `packages/mo-fmt/package.json` on `main` (`.github/workflows/release.yml`), which tags from that file's `version`.
