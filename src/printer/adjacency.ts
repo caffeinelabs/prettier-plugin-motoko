@@ -225,11 +225,13 @@ export function isIndivisible(tokenText: string): boolean {
 
 /**
  * The instantiating `<`: glue it to its type arguments and to whatever precedes it.
- * Rows L1, L2, L5, L6, L7.
+ * Rows L1, L2, L5, L6, L7, L8.
  *
  * `docs/adjacency.md` L5 is the reason this is a `glue` and not a `line`: `List<List<Nat>>`
  * must not become `List<List<Nat> >`, because `> >` does not re-lex to a close pair under
- * either moc or tree-sitter.
+ * either moc or tree-sitter. L8 is the same defect reached from the other end — a list that
+ * breaks must still glue its close, which `ListDescriptor.closeGlued` enforces in
+ * `src/printer/parts.ts`, because no gate in this repo can see it.
  */
 export function instantiationAngles(inner: Doc): Doc {
     return glue(inner);
@@ -458,7 +460,7 @@ export const CHECKLIST: readonly ChecklistItem[] = [
     },
     {
         n: 3,
-        rows: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7'],
+        rows: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8'],
         rule: 'glue angles, space comparisons',
     },
     {

@@ -229,15 +229,62 @@ operand) parses on all three. `-1` glued to the `)` and ` - 1` both fail on 1.16
 
 ### 2.3 `<` : instantiation vs comparison
 
-| #   | pair                                    | safe emission                                         | verb                           | required by                          |
-| --- | --------------------------------------- | ----------------------------------------------------- | ------------------------------ | ------------------------------------ |
-| L1  | `f<Nat>(1)` instantiation               | **force-glued**: `f<Nat>(1)`                          | force-glued (both `<` and `>`) | `ts` (misreads spaced as comparison) |
-| L2  | `List<Nat>` type arguments              | **force-glued**: `List<Nat>`                          | force-glued                    | `ts`                                 |
-| L3  | `x < y` comparison                      | **force-spaced both sides**: `x < y`                  | force-spaced                   | `1x`,`2x`,`ts`                       |
-| L4  | `x <= y`, `x >= y`, `x != y`, `x == y`  | **force-spaced both sides**                           | force-spaced                   | `1x`,`2x`                            |
-| L5  | nested close `List<List<Nat>>`          | **force-glued** (no space before `>>`)                | force-glued                    | `ts`                                 |
-| L6  | `mixin<system>()`, `include M<system>;` | **force-glued** both angles                           | force-glued                    | `ts`                                 |
-| L7  | `type F<A <: Nat> = A;` bound           | force-glued around `<` and `>`; **space around `<:`** | mixed                          | `ts`                                 |
+| #   | pair                                    | safe emission                                           | verb                           | required by                          |
+| --- | --------------------------------------- | ------------------------------------------------------- | ------------------------------ | ------------------------------------ |
+| L1  | `f<Nat>(1)` instantiation               | **force-glued**: `f<Nat>(1)`                            | force-glued (both `<` and `>`) | `ts` (misreads spaced as comparison) |
+| L2  | `List<Nat>` type arguments              | **force-glued**: `List<Nat>`                            | force-glued                    | `ts`                                 |
+| L3  | `x < y` comparison                      | **force-spaced both sides**: `x < y`                    | force-spaced                   | `1x`,`2x`,`ts`                       |
+| L4  | `x <= y`, `x >= y`, `x != y`, `x == y`  | **force-spaced both sides**                             | force-spaced                   | `1x`,`2x`                            |
+| L5  | nested close `List<List<Nat>>`          | **force-glued** (no space before `>>`)                  | force-glued                    | `ts`                                 |
+| L6  | `mixin<system>()`, `include M<system>;` | **force-glued** both angles                             | force-glued                    | `ts`                                 |
+| L7  | `type F<A <: Nat> = A;` bound           | force-glued around `<` and `>`; **space around `<:`**   | mixed                          | `ts`                                 |
+| L8  | a **broken** angle list                 | the close is **glued to the last item**: `…Gamma> = A;` | force-glued                    | `1x`,`2x`,`ts`                       |
+
+**L8 is a placement rule, and unlike L1–L7 it is not about a token pair.** A list
+whose delimiters are _regenerated_ — rather than copied, as `path_typ`'s `<`/`>` are —
+can put its close anywhere, and the obvious spelling is the one every other list family
+uses: break after the opener, indent, and break before the closer. That spelling is a
+syntax error:
+
+```motoko no-repl
+type F<
+  A,
+  B
+> = A;              // syntax error [M0001], unexpected token '>'
+```
+
+The cause is the same lexer rule already quoted above for L3–L4, read in the other
+direction. `| Parser.GT when leading_ws () && trailing_ws () -> Parser.GTOP` means a `>`
+with whitespace on **both** sides lexes as the greater-than _operator_; putting the close
+on its own line supplies exactly that whitespace. The rule is pinned to whitespace
+immediately before the close, verified on every compiler to hand — 0.16.3, 1.3.0, 1.5.0,
+1.10.0, 1.12.0, 1.15.0, 1.16.0, 2.0.0-beta.1 and the dfx-bundled 1.1.0:
+
+```
+type F<A> = A;      parses 2/2      the glued spelling
+type F<A > = A;     parses 0/2      whitespace before the close
+type F<A\n> = A;    parses 0/2      the same, as a newline
+```
+
+The seam is **one-sided**, which is why the rule is a flag on the angle families rather
+than a `glue()` around the whole list: breaking _after_ the opening `<` is accepted by
+every compiler tested (`type F<\n  A,\n  B> = A;` parses 3/3), so only the close is
+constrained. It holds in `typ_params` and in `inst` in _type_ position; `f<Nat >(1)` in
+expression position is accepted, so the restriction is not uniformly applicable and the
+glue is the safe spelling everywhere. `func`/`class` declarations carry `typ_params` and
+are covered by the same rule; `module M<A, B>` fails in both spellings and is a separate
+grammar limitation, not this one.
+
+**No gate in this repo can catch a violation.** `shapeOf` projects `typ_params` and
+`inst` by node text, so the glued and broken spellings project to identical shapes:
+`compareShapes` returns `null`, the runtime guard passes, the corpus run passes for the
+same reason, and idempotence holds trivially on the broken output because formatting it
+again reproduces it. `ListDescriptor.closeGlued` (`src/printer/parts.ts`) is the only
+thing enforcing L8, and `tests/printer.test.ts`'s "the angle close" group asserts the
+_output_ rather than a rule, because output is the only place the defect is visible.
+`tests/adjacency.test.ts` carries the breadth (the same defect reached through each
+angle family, plus the comment variant of §4.1); `printer.test.ts` carries the depth
+for `typ_params`/`inst` specifically.
 
 The lexers do not agree on how they _decide_ `<`, which is why the same source can be
 read differently:
@@ -509,6 +556,40 @@ expression, or after it) or, if that is impossible, do not break the seam. Do no
 emit `f /*c*/(x)`. `m-comment-open` (`a / * b;`) is `B-ERROR`: the printer must also
 never insert whitespace _within_ a `/*` comment opener.
 
+### 4.1 The angle close is the one seam where a comment is not a conflict
+
+The claim above — that a comment "is not whitespace for this purpose" — is right for
+every seam the section probes, but it is **wrong in the printer's favour** at the L8
+close, and the difference is worth stating because it is the one case where the
+conflict rule and the angle rule disagree about what to do with a comment.
+
+`L8` requires the close to be glued to the last item because a `>` with whitespace on
+both sides re-lexes as the operator. A comment is not whitespace to that rule, so a
+comment _does_ hold the two tokens together:
+
+```motoko no-repl
+type F<
+  A,
+  B
+  /*c*/> = A;      parses on 1.16.0 and 2.0.0-beta.1
+```
+
+Measured against the alternative spellings, on both generations:
+
+```
+type F<A, B\n  /*c*/> = A;     accepted 2/2     the comment is the glue
+type F<A, B\n  /*c*/\n> = A;   M0001 2/2        a gap before the close is still fatal
+type F<A, B\n> = A;            M0001 2/2        and with no comment at all
+```
+
+So the comment may **not** be treated the way the rule above treats one elsewhere:
+hoisting it out of the seam is not required here, and moving it onto its own line —
+the natural way to place a trailing comment — reintroduces the `M0001` this whole
+item exists to prevent. The safe spelling is the comment glued to the close, which is
+what the list printer emits, and it is the one place where "do not break the seam" and
+"do not move the author's comment" are satisfiable at once. `tests/adjacency.test.ts`
+item 8 pins it.
+
 ---
 
 ## 5. tree-sitter vs moc deviations
@@ -584,9 +665,10 @@ false — see [§1.4](#14-instruments). All moc columns are from real runs.
    parentheses**. Do not emit the tight form.
 2. **Bare-branch rule (B1–B3, B5):** after a head, force a space before `(`, `[`,
    `-`/`+`/`^` operands, and `#`. Never brace a unary-minus branch (§3.2).
-3. **Angle rule (L1–L7):** force-glue `<`/`>`/`</`/`>>` in instantiation, type args,
+3. **Angle rule (L1–L8):** force-glue `<`/`>`/`</`/`>>` in instantiation, type args,
    `mixin<…>`, `include M<…>`, and bounds; force-space comparison operators on both
-   sides.
+   sides; and when an angle list _breaks_, glue the close to the last item (L8) — the
+   one rule in this list that no test or corpus run in the repo can enforce.
 4. **Coalesce rule (C1–C7):** emit `a ?? b` (space or no space before, **space
    after**); emit `? ?a` for double option; never emit glued `??` before an operand.
 5. **Number-dot rule (D1–D4):** force-glue `5.toText()`; never emit `5. toText()`.
