@@ -15,7 +15,7 @@
  *     change, so it is not a style preference; `docs/style.md` §"Comments" states it as required.
  *  3. **Otherwise the source decides it.** A node that is not a list is printed as its children in
  *     order with the gaps between them reproduced from the source. That is byte-exact for everything
- *     the printer does not yet understand, which is what makes the guard's tolerance list empty.
+ *     the printer does not yet understand, which is what keeps the guard's tolerance list empty.
  *
  * ## Why "the source decides it" is not just `verbatim`
  *
@@ -241,11 +241,37 @@ function itemDoc(
  * Not a `group`: a file is always broken, so a group would only add a flattening pass whose answer is
  * known. The separators are `hardline` for the same reason, and the style guide's "a blank line is
  * kept, and at most one" falls out of using two of them.
+ *
+ * ## The trailing newline is derived, not reproduced
+ *
+ * A file's last character is a **gap**, and it is the one gap the walk cannot copy: `replaceEndOfLine`
+ * renders a newline as `literalline`, and Prettier's line writer `trim`s `literalline` on the way out
+ * — so reproducing the source's own tail emits *nothing*. (`hardline` does not trim, `.probe/_render.mts`.)
+ * That is why this function does not simply return the last item's gap the way `listItemsDoc` does for
+ * a list: it emits a `hardline` instead, exactly one, whenever the file has any content at all.
+ *
+ * One trailing newline, unconditionally, is also what Prettier's own contract requires — the newline
+ * is the formatter's, not the input's; `prettier.format('let x = 1')` yields `'let x = 1\n'`, and the
+ * pre-rewrite engine obeyed the same rule.
+ *
+ * This was a real bug, and it was **invisible to all three M2 gates**: `shapeOf` has no node for a
+ * trailing gap, so the runtime guard could not see the newline; idempotence is satisfied trivially
+ * once it is gone; and the churn report's whitespace tiers classify the difference as `layoutOnly`.
+ * So the tests here are the *only* thing that caught it, which is the argument for asserting exact
+ * output rather than asserting "no guard failure".
+ *
+ * The whitespace-only file is the case that looks like an exception and is not one. A file with no
+ * items prints the empty string rather than a bare newline, matching Prettier's own treatment of an
+ * empty document (and 0.13's) — which is also right for the right reason: `hardline` on an empty Doc
+ * is a `line` that flattens to `''`, so a document that is *only* a break is not a document with a
+ * trailing newline, it is an empty one.
  */
 function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
     const items = listItems(node);
-    if (items.length === 0)
-        return hasBlankLine(node) ? [hardline, hardline] : '';
+    // No items means no content — including for `\n\n`, where the blank line is the *only* thing in
+    // the file. Emitting it would produce a file holding a lone newline, which is not what an empty
+    // list prints. See the paragraph above on why this is not an exception.
+    if (items.length === 0) return '';
 
     const out: Doc[] = [];
     for (let i = 0; i < items.length; i += 1) {
@@ -266,6 +292,9 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
         out.push(blankIn(next?.gap ?? null) ? [hardline, hardline] : hardline);
     }
 
+    // The one hardline the file does not get from its own source. See the header: the source's tail
+    // gap cannot survive `literalline`'s trim, so this is emitted rather than reproduced.
+    out.push(hardline);
     return out;
 }
 
