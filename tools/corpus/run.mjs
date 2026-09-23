@@ -1,12 +1,13 @@
 /**
- * The corpus harness (docs/formatter-rework.md, "Verification" item 3; M1's exit criterion).
+ * The corpus harness (docs/formatter-rework.md, "Verification" item 3; M1's exit criterion,
+ * extended by M2's "corpus CI job (all checks)").
  *
- * What this runs, and what it deliberately does not:
+ * What this runs:
  *
  * The plan's corpus unit has four checks — token round-trip, idempotence, re-parse (no
- * ERROR/MISSING) and tree equality between input and output. **Two of those need a printer, and
- * there is no printer yet.** So this harness runs only the half that the parser and normaliser can
- * answer on their own, and says so in its output rather than reporting the other two as passing:
+ * ERROR/MISSING) and tree equality between input and output. M1 had no printer, so the harness ran
+ * only the two the parser and normaliser answer on their own and reported the other two as
+ * `not-run (no printer)` rather than as passing:
  *
  *   1. parse            — every unit parses, or raises `MotokoSyntaxError` (never a crash);
  *   2. token round-trip — re-concatenating the normalised tree's leaves and gaps reproduces the
@@ -15,8 +16,18 @@
  *   3. invariants       — normalised offsets are monotonic and in range, and a tree that parsed
  *                         without error carries no `error`/`missing` node.
  *
- * Idempotence and tree equality are **NOT RUN**; they are reported as `not-run (no printer)` in
- * RESULTS.md and in report.json, so nobody can mistake their absence for a pass.
+ * M2 shipped the `preserve` printer, so the other two run now, on exactly the units that parsed:
+ *
+ *   4. idempotence      — `format(format(x)) === format(x)`;
+ *   5. re-parse         — the printed output parses with no error (this is also what `format`
+ *                         itself enforces through the runtime guard, but the harness checks it
+ *                         independently so a guard that silently stopped firing would show here);
+ *   6. tree equality    — `shapeOf` of the input and of the printed output agree.
+ *
+ * A unit that the grammar rejects on purpose is not formatted: there is no output to compare, and
+ * inventing one would mean formatting something moc also rejects. Those units are counted as
+ * `not-formattable` with the reason, so the difference between "formatted and equal" and "never
+ * reached the printer" is visible in the report rather than folded into a denominator.
  *
  * "No silent caps": every unit the harness decides not to check is appended to a skip list with a
  * machine-readable reason, and the report prints the counts. A repo that could not be found, a
@@ -520,6 +531,7 @@ async function checkUnit(unit, deps) {
 
     return {
         status: 'ok',
+        root: result.root,
         ms: Number(process.hrtime.bigint() - started) / 1e6,
     };
 }
@@ -527,6 +539,100 @@ async function checkUnit(unit, deps) {
 function firstLine(text) {
     const cut = text.indexOf('\n');
     return cut < 0 ? text : text.slice(0, cut);
+}
+
+/**
+ * The three printer checks the plan's corpus unit asks for, run on a unit that parsed.
+ *
+ * This is the M2 half of the harness. It is deliberately *not* inside the printer: `format` already
+ * runs the runtime guard, and the point of measuring here is to be able to disagree with it. If the
+ * guard's tolerance list widened until it stopped firing, the guard would still report success and
+ * this stage would not — which is the only reason both exist.
+ *
+ * The three checks are ordered cheapest-and-most-fundamental first, so a unit that fails re-parse
+ * is not then compared for tree equality against a tree that has no business existing:
+ *
+ *   1. `reParse`     — the printed text parses. A formatter whose output its own parser rejects is
+ *                      broken regardless of what it meant.
+ *   2. `treeEquality`— `shapeOf(input) === shapeOf(output)`. This is the `preserve` invariant
+ *                      restated: the layout changed, the program did not. A tree difference here
+ *                      means the printer changed meaning, which is the one failure this whole
+ *                      milestone exists to prevent.
+ *   3. `idempotence` — `format(format(x)) === format(x)`. A formatter that is not a fixed point
+ *                      makes every downstream diff noisy and every round-trip claim empty.
+ *
+ * Note what tree equality can and cannot see, because the harness must not overclaim: `shapeOf`
+ * projects `typ_params` and `inst` by node text, so it is blind to whitespace inside an angle list
+ * (`docs/adjacency.md` L8) and has no node for a trailing gap, so it is blind to a trailing
+ * newline. Both were real defects found by other means. A zero here is a necessary condition, not
+ * a sufficient one, and `tests/printer.test.ts` and `tests/adjacency.test.ts` are where the seams no
+ * gate can see are pinned.
+ */
+async function checkPrinter(unit, deps, sourceRoot, printed) {
+    const { parse, shapeOf, compareShapes } = deps;
+    const started = process.hrtime.bigint();
+    const ms = () => Number(process.hrtime.bigint() - started) / 1e6;
+
+    let outRoot;
+    try {
+        outRoot = (await parse(printed)).root;
+    } catch (error) {
+        return {
+            status: 'printer-reparse',
+            message: firstLine(error?.message ?? String(error)),
+            ms: ms(),
+        };
+    }
+
+    const difference = compareShapes(shapeOf(sourceRoot), shapeOf(outRoot));
+    if (difference) {
+        return {
+            status: 'printer-tree',
+            message:
+                difference.path === undefined
+                    ? String(difference)
+                    : `at ${difference.path}: ${JSON.stringify(difference)}`,
+            ms: ms(),
+        };
+    }
+
+    let again;
+    try {
+        again = await deps.format(printed);
+    } catch (error) {
+        return {
+            status: 'printer-idempotence',
+            message: `re-formatting the output threw: ${firstLine(error?.message ?? String(error))}`,
+            ms: ms(),
+        };
+    }
+    if (again !== printed) {
+        return {
+            status: 'printer-idempotence',
+            message: 'format(format(x)) !== format(x)',
+            // The first differing line is the whole diagnostic; the full texts can be megabytes.
+            firstDiff: firstLineDiff(printed, again),
+            ms: ms(),
+        };
+    }
+
+    return { status: 'ok', ms: ms() };
+}
+
+/** The first line where two texts differ, for a report that stays readable on a 2000-line file. */
+function firstLineDiff(a, b) {
+    const as = a.split('\n');
+    const bs = b.split('\n');
+    for (let i = 0; i < Math.max(as.length, bs.length); i++) {
+        if (as[i] !== bs[i]) {
+            return {
+                line: i + 1,
+                expected: as[i] ?? null,
+                got: bs[i] ?? null,
+            };
+        }
+    }
+    return null;
 }
 
 /**
@@ -637,6 +743,107 @@ async function selfTest(deps) {
 }
 
 /**
+ * The printer check's own non-vacuity test, on the same principle as `selfTest`.
+ *
+ * `checkPrinter` is the harness's one new moving part in M2, and its three failure buckets could
+ * all read zero simply because the function returns `ok` without lookin at anything. So this feeds
+ * it a real source it *knows* formats, and then requires each check to fire on a deliberate
+ * corruption of what it is given:
+ *
+ *   - a `sourceRoot` from a different program makes tree equality detect a difference (and proves
+ *     `compareShapes` is being consulted rather than assumed);
+ *   - a `printed` string that is not a fixed point makes idempotence fail;
+ *   - a `printed` string that does not parse makes re-parse fail.
+ *
+ * The last two are simulated by driving the pieces directly rather than by finding a source the
+ * printer mishandles — there is no such source, which is the point of the run — so the checks here
+ * are of the harness's logic, not of the printer.
+ */
+async function printerSelfTest(deps) {
+    const { parse } = deps;
+    const results = [];
+    const record = (name, expected, actual) =>
+        results.push({ name, expected, actual, pass: expected === actual });
+
+    const source = 'actor { public func f() : async Nat { 1 } };';
+    const unit = {
+        id: 0,
+        source: 'self-test',
+        path: 'self-test',
+        line: null,
+        text: source,
+    };
+
+    try {
+        const printed = await deps.format(source);
+        const clean = await checkPrinter(
+            unit,
+            deps,
+            (await parse(source)).root,
+            printed,
+        );
+        record(
+            'printer self-test: a clean unit passes every check',
+            'ok',
+            clean.status,
+        );
+
+        // A different program as the reference tree: tree equality must not be a tautology.
+        const other = await parse(
+            'actor { public func g() : async Nat { 2 } };',
+        );
+        const wrongTree = await checkPrinter(unit, deps, other.root, printed);
+        record(
+            'printer self-test: a mismatched reference tree is caught',
+            'printer-tree',
+            wrongTree.status,
+        );
+
+        // Non-parseable "output": the re-parse check must speak.
+        const broken = await checkPrinter(
+            unit,
+            deps,
+            (await parse(source)).root,
+            'actor { public func f() : async Nat { 1 } ',
+        );
+        record(
+            'printer self-test: unparseable output is caught',
+            'printer-reparse',
+            broken.status,
+        );
+
+        // Not-a-fixed-point "output": idempotence must speak. Trailing blank lines are invisible to
+        // `shapeOf`, so this lands on the idempotence check rather than the tree check — which is
+        // the ordering `checkPrinter` documents.
+        const unstable = await checkPrinter(
+            unit,
+            deps,
+            (await parse(source)).root,
+            `${source}\n\n\n`,
+        );
+        record(
+            'printer self-test: a non-fixed-point output is caught',
+            'printer-idempotence',
+            unstable.status,
+        );
+    } catch (error) {
+        record(
+            `printer self-test: threw (${firstLine(String(error?.message))})`,
+            'no throw',
+            'throw',
+        );
+    }
+
+    const failed = results.filter((r) => !r.pass);
+    return {
+        passed: results.length - failed.length,
+        total: results.length,
+        failed,
+        results,
+    };
+}
+
+/**
  * The fence scanner's own self-test.
  *
  * The plan names the exact bug this guards against: "#6385's own first harness anchored the fence
@@ -722,18 +929,50 @@ async function main() {
     const normalizeModule = await import(
         pathToFileURL(join(repoRoot, 'src', 'parser', 'normalize.ts')).href
     );
+    const verifyModule = await import(
+        pathToFileURL(join(repoRoot, 'src', 'verify.ts')).href
+    );
+    // The printer is imported the same way, so the harness measures `src/`, not a stale `lib/`.
+    // Prettier is resolved from the repo's own node_modules — the harness is not a published
+    // entry point, and pinning a second copy of Prettier here would let the two drift.
+    const prettier = (await import('prettier')).default;
+    const plugin = (
+        await import(pathToFileURL(join(repoRoot, 'src', 'index.ts')).href)
+    ).default;
+
+    /**
+     * Format one unit exactly as a user would: same parser name, same plugin, and the documented
+     * defaults. An option set that differed from `printer.test.ts`'s would let the corpus pass while
+     * a test configuration failed (or the reverse), so this is the one place the pair is spelled.
+     */
+    const format = (source) =>
+        prettier.format(source, {
+            parser: 'motoko',
+            plugins: [plugin],
+            printWidth: 80,
+            tabWidth: 2,
+            trailingComma: 'none',
+        });
+
     const deps = {
         parse: parseModule.parse,
         MotokoSyntaxError: parseModule.MotokoSyntaxError,
         checkRoundTrip: normalizeModule.checkRoundTrip,
+        shapeOf: normalizeModule.shapeOf,
+        compareShapes: verifyModule.compareShapes,
+        format,
     };
     if (
         typeof deps.parse !== 'function' ||
-        typeof deps.checkRoundTrip !== 'function'
+        typeof deps.checkRoundTrip !== 'function' ||
+        typeof deps.shapeOf !== 'function' ||
+        typeof deps.compareShapes !== 'function' ||
+        typeof deps.format !== 'function'
     ) {
         throw new Error(
-            'corpus harness: src/parser/parse.ts or normalize.ts did not export the expected ' +
-                'functions. The harness measures those modules; a rename must be reflected here.',
+            'corpus harness: src/parser/parse.ts, normalize.ts, verify.ts or src/index.ts did not ' +
+                'export the expected functions. The harness measures those modules; a rename must ' +
+                'be reflected here.',
         );
     }
 
@@ -742,14 +981,16 @@ async function main() {
 
     // Prove the checks can fail before reporting that they did not.
     const selfTestResult = await selfTest(deps);
+    const printerSelfTestResult = await printerSelfTest(deps);
     const allSelfTestFailures = [
         ...selfTestResult.failed,
         ...selfTestResult.fences.failed,
+        ...printerSelfTestResult.failed,
     ];
     if (allSelfTestFailures.length) {
         throw new Error(
             `corpus harness self-test failed (${allSelfTestFailures.length} of ` +
-                `${selfTestResult.total + selfTestResult.fences.total}): ` +
+                `${selfTestResult.total + selfTestResult.fences.total + printerSelfTestResult.total}): ` +
                 allSelfTestFailures
                     .map((f) =>
                         'expected' in f
@@ -763,8 +1004,11 @@ async function main() {
     if (!opts.quiet) {
         process.stderr.write(
             `self-test: ${selfTestResult.passed}/${selfTestResult.total} round-trip checks + ` +
-                `${selfTestResult.fences.passed}/${selfTestResult.fences.total} fence checks passed ` +
-                `(the round-trip check rejects 3 deliberate corruptions and accepts 9 clean shapes)\n`,
+                `${selfTestResult.fences.passed}/${selfTestResult.fences.total} fence checks + ` +
+                `${printerSelfTestResult.passed}/${printerSelfTestResult.total} printer checks passed ` +
+                `(the round-trip check rejects 3 deliberate corruptions and accepts 9 clean shapes; ` +
+                `the printer check is fed a mismatched tree, unparseable output and a non-fixed-point ` +
+                `output, and must reject all three)\n`,
         );
     }
 
@@ -862,8 +1106,33 @@ async function main() {
         crash: [],
         'round-trip': [],
         invariant: [],
+        'printer-reparse': [],
+        'printer-tree': [],
+        'printer-idempotence': [],
     };
     let ok = 0;
+    // Units that never reached the printer, because the grammar rejected them. Tracked separately
+    // from `ok` so the printer checks have an honest denominator: "0 of 0 tree differences" and
+    // "0 of 5590" are different claims, and only the second is worth anything. Every unit that
+    // *did* parse is formatted, so `notFormattable` is exactly the syntax-error/round-trip/crash
+    // set and `printerChecked + printerFailures + notFormattable === units`.
+    let notFormattable = 0;
+    let printerChecked = 0;
+    // Per-source printer tallies. Kept as a separate map rather than folded into `bySource`'s `ok`
+    // because those two numbers mean different things: `ok` is "the parser accepted this unit",
+    // which is what the M1 headline measures, while these are the M2 addendum. Folding them would
+    // silently redefine a published number.
+    const printerBySource = new Map();
+    const tally = (source, key) => {
+        const row = printerBySource.get(source) ?? {
+            checked: 0,
+            reparse: 0,
+            tree: 0,
+            idempotence: 0,
+        };
+        row[key] += 1;
+        printerBySource.set(source, row);
+    };
     const progress = (done, total, unit) => {
         if (opts.quiet || done % 500 !== 0) return;
         process.stderr.write(
@@ -874,8 +1143,53 @@ async function main() {
     for (let i = 0; i < units.length; i++) {
         const unit = units[i];
         const outcome = await checkUnit(unit, deps);
-        if (outcome.status === 'ok') ok += 1;
-        else {
+        if (outcome.status === 'ok') {
+            ok += 1;
+            // Parse is clean, so the printer half can run. A unit the grammar rejects on purpose is
+            // not formatted: there is no meaningful output to compare, and formatting it would also
+            // mean asking Prettier to print a tree that carries an error node.
+            const printed = await deps.format(unit.text).catch((error) => ({
+                thrown: firstLine(error?.message ?? String(error)),
+            }));
+            if (typeof printed !== 'string') {
+                // `format` itself refused, which is a printer failure and belongs in the failures
+                // list rather than the skip list — the guard rejected the printer's own output.
+                failures['printer-reparse'].push({
+                    id: unit.id,
+                    source: unit.source,
+                    path: unit.path,
+                    line: unit.line,
+                    message: `format() threw: ${printed.thrown}`,
+                });
+                tally(unit.source, 'reparse');
+            } else {
+                const check = await checkPrinter(
+                    unit,
+                    deps,
+                    outcome.root,
+                    printed,
+                );
+                if (check.status === 'ok') {
+                    printerChecked += 1;
+                    tally(unit.source, 'checked');
+                } else {
+                    failures[check.status].push({
+                        id: unit.id,
+                        source: unit.source,
+                        path: unit.path,
+                        line: unit.line,
+                        message: check.message,
+                        ...(check.firstDiff
+                            ? { firstDiff: check.firstDiff }
+                            : {}),
+                    });
+                    // `printer-reparse` / `printer-tree` / `printer-idempotence` are exactly the
+                    // `reparse` / `tree` / `idempotence` tallies, so the key is the tail of the
+                    // failure bucket's name rather than a second lookup table that could drift.
+                    tally(unit.source, check.status.slice('printer-'.length));
+                }
+            }
+        } else {
             failures[outcome.status].push({
                 id: unit.id,
                 source: unit.source,
@@ -885,6 +1199,7 @@ async function main() {
                 ...(outcome.loc ? { loc: outcome.loc } : {}),
                 ...(outcome.stack ? { stack: outcome.stack } : {}),
             });
+            notFormattable += 1;
         }
         progress(i + 1, units.length, unit);
     }
@@ -925,6 +1240,10 @@ async function main() {
             crash: 0,
             roundTrip: 0,
             invariant: 0,
+            printerChecked: 0,
+            printerReParse: 0,
+            printerTree: 0,
+            printerIdempotence: 0,
         });
     }
     for (const u of units) {
@@ -939,6 +1258,16 @@ async function main() {
     for (const f of failures['round-trip'])
         bySource.get(f.source).roundTrip += 1;
     for (const f of failures.invariant) bySource.get(f.source).invariant += 1;
+    // The printer tallies ride along per source, so "0 tree differences" can be read against the
+    // number of units that actually reached the printer in that source rather than against `ok`.
+    for (const [label, row] of printerBySource) {
+        const target = bySource.get(label);
+        if (!target) continue;
+        target.printerChecked = row.checked;
+        target.printerReParse = row.reparse;
+        target.printerTree = row.tree;
+        target.printerIdempotence = row.idempotence;
+    }
     for (const [label, row] of bySource) {
         row.ok =
             row.units -
@@ -974,14 +1303,19 @@ async function main() {
             syntaxErrorsDocumentedDeviation: documented.length,
             syntaxErrorsUnexpected: unexpected.length,
             syntaxErrorsInFences: fenceErrors.length,
+            printerChecked,
+            notFormattable,
+            printerReParse: failures['printer-reparse'].length,
+            printerTree: failures['printer-tree'].length,
+            printerIdempotence: failures['printer-idempotence'].length,
         },
         checks: {
             parse: 'run',
             tokenRoundTrip: 'run',
             invariants: 'run',
-            idempotence: 'not-run (no printer)',
-            reParse: 'not-run (no printer)',
-            treeEquality: 'not-run (no printer)',
+            idempotence: 'run',
+            reParse: 'run',
+            treeEquality: 'run',
             mocOracle:
                 'not-run (no oracle layer; parseMotoko JS artifact absent)',
         },
@@ -1001,6 +1335,7 @@ async function main() {
         skips: counters.skipped,
         skipsByKind: countBy(counters.skipped, (s) => s.kind),
         selfTest: selfTestResult,
+        printerSelfTest: printerSelfTestResult,
         failures: {
             ...failures,
             'unexpected-syntax-error': unexpected,
@@ -1031,6 +1366,11 @@ async function main() {
                 `syntax-error ${report.totals.syntaxError} (${report.totals.syntaxErrorsUnexpected} unexpected)  ` +
                 `crash ${report.totals.crash}  ` +
                 `round-trip-fail ${report.totals.roundTrip}  invariant-fail ${report.totals.invariant}`,
+            `printer ${report.totals.printerChecked}/${report.totals.ok} checked  ` +
+                `reparse-fail ${report.totals.printerReParse}  ` +
+                `tree-diff ${report.totals.printerTree}  ` +
+                `idempotence-fail ${report.totals.printerIdempotence}  ` +
+                `(not-formattable ${report.totals.notFormattable})`,
             `skipped ${report.skips.length} item(s) across ${Object.keys(report.skipsByKind).length} kind(s)`,
             `wrote ${relative(process.cwd(), opts.json)}`,
             `wrote ${relative(process.cwd(), opts.report)}`,
@@ -1038,13 +1378,18 @@ async function main() {
         ].join('\n'),
     );
 
-    // The gate: crashes (our bugs), round-trip failures (our bugs), invariant violations (our bugs)
-    // and a whole-file syntax error that is not accounted for — all fail the run. Ordinary grammar
-    // rejections on fixtures, documented deviations and Markdown fences do not.
+    // The gate: crashes (our bugs), round-trip failures (our bugs), invariant violations (our bugs),
+    // a whole-file syntax error that is not accounted for, and every printer failure — a printer
+    // failure is by definition our bug, since a corpus file that parsed cleanly was formatted and
+    // the result either did not parse, did not mean the same thing, or was not a fixed point.
+    // Ordinary grammar rejections on fixtures, documented deviations and Markdown fences do not.
     const fatal =
         failures.crash.length +
         failures['round-trip'].length +
         failures.invariant.length +
+        failures['printer-reparse'].length +
+        failures['printer-tree'].length +
+        failures['printer-idempotence'].length +
         unexpected.length;
     process.exitCode = fatal === 0 ? 0 : 1;
 }
@@ -1143,11 +1488,23 @@ function renderReport(report, opts) {
     }
     lines.push('');
     lines.push(
-        '**Idempotence, re-parse and tree equality are not run.** They compare a formatted output ' +
-            'against an input, and there is no printer yet — M1 is parse-only. Reporting them as ' +
-            'passing would be vacuous, so they are listed as `not-run`. The M1 exit criterion ' +
-            '("100% of the corpus parses and round-trips") is therefore only half-evaluable: ' +
-            '*parses* and *token round-trips* are measured below; *format-and-reparse* is not.',
+        '**Idempotence, re-parse and tree equality are now run.** They compare a formatted output ' +
+            'against its input, so they need a printer; M1 was parse-only and reported them ' +
+            '`not-run`. M2 ships the `preserve` printer, and the harness formats every unit that ' +
+            'parsed and checks the output three ways: it re-parses, it means the same thing ' +
+            '(`compareShapes`), and formatting it again is a fixed point. The denominator is not ' +
+            'the unit count — units the grammar rejects have no output to compare — so the printer ' +
+            'totals below are reported against the units that reached the printer, and the rest are ' +
+            'counted as `not-formattable`.',
+    );
+    lines.push('');
+    lines.push(
+        '**A zero here is a necessary condition, not a sufficient one.** `shapeOf` projects an ' +
+            'angle list (`typ_params`, `inst`) by its node text, so it is blind to whitespace ' +
+            'inside the angle brackets — the `L8` defect where a broken list drops the close onto ' +
+            'its own line, which `moc` then reads as a greater-than operator. It is also blind to a ' +
+            'trailing gap. Those seams are pinned by `tests/adjacency.test.ts` instead, which is ' +
+            'the reason that suite exists.',
     );
     lines.push('');
     lines.push(
@@ -1198,6 +1555,29 @@ function renderReport(report, opts) {
     lines.push(`- **Invariant violations (our bugs):** ${t.invariant}`);
     lines.push('');
     lines.push(
+        `### Printer (\`preserve\`) — ${t.printerChecked}/${t.ok} parse-ok units checked`,
+    );
+    lines.push('');
+    lines.push(
+        '| check | count | meaning |',
+        '| --- | ---: | --- |',
+        `| units formatted and re-parsed identically | ${t.printerChecked} | a failure to re-parse is a syntax error the printer introduced |`,
+        `| output does not parse (OUR BUG) | ${t.printerReParse} | \`format\` threw, or its output was rejected |`,
+        `| output means something else (OUR BUG) | ${t.printerTree} | \`compareShapes\` found a difference |`,
+        `| output is not a fixed point (OUR BUG) | ${t.printerIdempotence} | formatting twice differs from formatting once |`,
+        `| units the grammar rejected or the normaliser failed, so no output to compare | ${t.notFormattable} | they are the ${t.syntaxError} syntax error(s), ${t.roundTrip} round-trip failure(s), ${t.crash} crash(es) and ${t.invariant} invariant violation(s) above, so \`${t.notFormattable} = ${t.units} - ${t.ok}\` |`,
+    );
+    lines.push('');
+    lines.push(
+        `The three printer failure counts are what fail the run. \`${t.printerChecked} + ${t.notFormattable} = ${t.ok}\` ` +
+            `is the accounting identity: every parse-ok unit was formatted and checked, and the rest ` +
+            `never had an output to check. With all three at zero the honest claim is *every unit ` +
+            `that parsed was formatted into something that parses, means the same thing, and is a ` +
+            `fixed point* — not "the printer is correct", because \`shapeOf\` cannot see the angle ` +
+            `seams (§ above).`,
+    );
+    lines.push('');
+    lines.push(
         `Across all sources, **${t.ok}/${t.units} = ${pct(t.ok, t.units)}** of units parse. ` +
             `Against the Motoko compiler repo alone — the number \`docs/m1-architecture.md\` quotes ` +
             `— it is **${moto.ok}/${moto.units} = ${pct(moto.ok, moto.units)}**: ` +
@@ -1225,17 +1605,25 @@ function renderReport(report, opts) {
     );
     lines.push('');
     lines.push(
-        '| source | units | files | fences | ok | syntax-error | crash | round-trip | invariant |',
+        '| source | units | files | fences | ok | syntax-error | crash | round-trip | invariant | printed | reparse-fail | tree-diff | idem-fail |',
     );
     lines.push(
-        '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+        '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
     );
     for (const row of report.sources) {
         lines.push(
             `| ${row.label} | ${row.units} | ${row.files} | ${row.fences} | ${row.ok} | ${row.syntaxError} | ` +
-                `${row.crash} | ${row.roundTrip} | ${row.invariant} |`,
+                `${row.crash} | ${row.roundTrip} | ${row.invariant} | ${row.printerChecked} | ` +
+                `${row.printerReParse} | ${row.printerTree} | ${row.printerIdempotence} |`,
         );
     }
+    lines.push('');
+    lines.push(
+        'The last four columns are the printer half for that source. `printed` counts units that ' +
+            'were formatted and passed all three printer checks, so it is the denominator for the ' +
+            'three failure columns next to it — a source where `printed` is 0 makes a `0` in a ' +
+            'failure column meaningless, not reassuring.',
+    );
     if (report.fences.files > 0) {
         lines.push('');
         const other = report.fences.total - report.fences.motoko;
@@ -1292,9 +1680,17 @@ function renderReport(report, opts) {
     lines.push('');
     lines.push('## Failures');
     lines.push('');
-    if (t.crash === 0 && t.roundTrip === 0 && t.invariant === 0) {
+    if (
+        t.crash === 0 &&
+        t.roundTrip === 0 &&
+        t.invariant === 0 &&
+        t.printerReParse === 0 &&
+        t.printerTree === 0 &&
+        t.printerIdempotence === 0
+    ) {
         lines.push(
-            '**No crashes, no round-trip mismatches, no invariant violations.**',
+            '**No crashes, no round-trip mismatches, no invariant violations, and no printer ' +
+                'failures.**',
         );
         lines.push('');
     }
@@ -1310,14 +1706,23 @@ function renderReport(report, opts) {
             'round-trip':
                 'Token round-trip failures (bugs in our code — must be 0)',
             invariant: 'Invariant violations (bugs in our code — must be 0)',
+            'printer-reparse':
+                'Printer output that does not parse, or `format` refusing (bugs in our code — must be 0)',
+            'printer-tree':
+                'Printer output that means something else (`compareShapes`) (bugs in our code — must be 0)',
+            'printer-idempotence':
+                'Printer output that is not a fixed point (bugs in our code — must be 0)',
         }[kind];
         lines.push(`### ${label} — ${list.length}`);
         lines.push('');
         lines.push('<details><summary>list</summary>');
         lines.push('');
         for (const f of list) {
+            const diff = f.firstDiff
+                ? ` (first difference at line ${f.firstDiff.line}: expected \`${f.firstDiff.expected}\`, got \`${f.firstDiff.got}\`)`
+                : '';
             lines.push(
-                `- \`${f.path}${f.line ? `#L${f.line}` : ''}\` — ${f.message}`,
+                `- \`${f.path}${f.line ? `#L${f.line}` : ''}\` — ${f.message}${diff}`,
             );
         }
         lines.push('');

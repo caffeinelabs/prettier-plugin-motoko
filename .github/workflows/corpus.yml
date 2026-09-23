@@ -1,6 +1,14 @@
-# The corpus harness (docs/formatter-rework.md, "Verification" item 3 and M1's exit criterion).
+# The corpus harness (docs/formatter-rework.md, "Verification" item 3, M1's exit criterion, and
+# M2's "corpus CI job (all checks)").
 #
-# Why this is not in tests.yml:
+# M2 turned the printer on, so this job is no longer a parse-only report generator: it now formats
+# every unit that parsed and checks the output re-parses, means the same thing (`compareShapes`) and
+# is a fixed point. A printer failure is a bug in this repo by definition, so it fails the run --
+# unlike a grammar rejection, which is expected and is accounted for in docs/grammar-deviations.md.
+# The harness proves its own checks are not vacuous before it reports (a round-trip self-test, a
+# fence self-test and a printer self-test); a self-test failure makes the whole run refuse.
+#
+# Why this is still not in tests.yml:
 #   - It is measured in minutes, not seconds, and it fails for reasons that are not the PR's
 #     fault (an upstream corpus moved, a new grammar deviation). Blocking every PR on it would
 #     train people to ignore it.
@@ -26,13 +34,22 @@
 #   changes out from under this file, that step fails with the new usage text instead of letting a
 #   mid-run "unknown option" surface as a corpus failure.
 #
-#   Two shape notes worth knowing when reading a run:
-#     - Exit code is 0 when nothing crashed and no unit failed the checks that CAN run. Units the
-#       grammar rejects are counted and listed but are NOT a failure — they are expected, and
-#       docs/grammar-deviations.md is where each one is justified. So green here does not mean
-#       "100% of the corpus parses"; it means "no regressions against the known deviation set".
-#     - `--repos` defaults to this repo's parent, so on a bare runner the sibling package sets are
-#       simply absent rather than an error, and the report says which units were unreachable.
+#   Three shape notes worth knowing when reading a run:
+#     - Exit code is 0 when nothing crashed, no unit failed the checks that CAN run, and no printer
+#       check failed. Units the grammar rejects are counted and listed but are NOT a failure — they
+#       are expected, and docs/grammar-deviations.md is where each one is justified. So green here
+#       does not mean "100% of the corpus parses"; it means "no regressions against the known
+#       deviation set, and the printer was a fixed point that changed no meaning".
+#     - The printer totals are reported against the units that reached the printer, not against
+#       the unit count: a unit the grammar rejects has no output to compare. The report prints both
+#       denominators and the identity `printed + not-formattable === parse-ok`.
+#     - A zero tree-difference count is a NECESSARY condition, not a sufficient one. `shapeOf`
+#       projects angle lists by node text, so it is blind to the `L8` seam where a broken list
+#       drops its close onto its own line and `moc` reads it as a greater-than operator. Those
+#       seams are pinned by tests/adjacency.test.ts; this job cannot see them.
+#     - `--repos` defaults to this repo's parent, so the sibling package sets are absent unless
+#       something checked them out; the report says which units were unreachable. This job clones
+#       only the compiler (see the clone step), so the package sets appear as counted skips.
 name: Corpus
 
 on:
@@ -77,10 +94,27 @@ jobs:
 
             # The corpus is the compiler's own test suite plus the grammar's packaged examples
             # (docs/formatter-rework.md: "../motoko/test, motoko-core, the grammar's
-            # test/packages.json set"). It is fetched by the harness, not by this workflow, so the
-            # pins live in one place -- the harness -- and can be re-pinned on purpose. Clone URL,
-            # org and branch names below are the harness's business; this workflow only supplies
-            # the revision.
+            # test/packages.json set").
+            #
+            # WHO CLONES, and why it is this file. The harness reads its sources out of local git
+            # checkouts and never clones: `--repos` scans for siblings and everything it cannot
+            # find becomes an explicit `source-absent` skip. That is the right design for a
+            # developer machine (offline, and the report says what it could not reach), but it
+            # means a bare runner sees no corpus at all -- and `motoko` is the one source the
+            # harness treats as REQUIRED, so it throws rather than reporting. The job therefore has
+            # to fetch the compiler itself. Only `motoko` is cloned: it is the source every
+            # published number is quoted against. The package sets stay absent on CI and show up
+            # as counted skips, which is honest and keeps this step cheap.
+            - name: Clone the Motoko corpus
+              env:
+                  CORPUS_MOTOKO_REV: ${{ inputs.motoko-rev || 'master' }}
+              run: |
+                  git clone --filter=blob:none --no-checkout \
+                    https://github.com/caffeinelabs/motoko ../motoko
+                  git -C ../motoko fetch --depth 1 origin "$CORPUS_MOTOKO_REV"
+                  git -C ../motoko checkout --detach FETCH_HEAD
+                  echo "corpus at $(git -C ../motoko rev-parse HEAD)"
+
             - name: Verify the harness contract
               run: |
                   if [ ! -f tools/corpus/run.mjs ]; then
