@@ -1,9 +1,11 @@
 /**
  * The Prettier plugin entry point.
  *
- * M2 SCOPE: the parser and the `preserve` printer are both live. `motokoSyntax: "moc2"` is accepted
- * but does nothing yet — the rewrite passes are M3, and until they exist the option is documented
- * rather than silently honoured. `preserve` is the default and is the mode this build is correct in.
+ * M2 SCOPE: the parser and the `preserve` printer are both live, and `motokoOrganizeImports` is
+ * implemented (see `parse` below). `motokoSyntax: "moc2"` is accepted but its rewrite passes are
+ * still M3 — the one thing it changes today is the spelling `organize` emits (`=` on every import
+ * statement), which is why `organizeSource` reads it. `preserve` is the default and is the mode this
+ * build is correct in.
  *
  * The parse path is `src/parser/parse.ts` (text -> CST -> normalised tree, `ERROR`/`MISSING` ->
  * `MotokoSyntaxError` with a location), and the print path is `src/printer/walk.ts`, whose runtime
@@ -21,7 +23,9 @@ import type {
 } from 'prettier';
 
 import { parse as parseMotoko } from './parser/parse.ts';
+import type { ParseResult } from './parser/parse.ts';
 import type { NormalBranch, NormalChild } from './parser/normalize.ts';
+import { organizeImportSection } from './organize/imports.ts';
 import { createPrinter, rememberRoot } from './printer/walk.ts';
 
 /**
@@ -103,14 +107,53 @@ export const printers: Record<string, Printer> = {
  * a non-node object at the root, and `getVisitorKeys`/`locStart` would then be asked about a
  * `ParseResult` rather than a branch. So the result is registered under its root instead, and the
  * root is what travels.
+ *
+ * ## Organize imports happens here, before `rememberRoot`
+ *
+ * `motokoOrganizeImports` rewrites the source's import section to *text* and re-parses it; the tree
+ * registered below is the one built from the **rewritten** text, so both the printer and the runtime
+ * guard see the rewritten program. That is the `moc2` pattern `src/verify.ts` documents, and it is
+ * what lets the printer combine and drop import statements without weakening the guard by a single
+ * comparison. `src/organize/imports.ts` has the reasoning, including why the rewrite is text rather
+ * than a rearrangement of nodes.
+ *
+ * The ordering is load-bearing. Registering the *original* tree and then printing the rewritten one
+ * is precisely the mismatch the guard exists to catch — it would throw
+ * `the printer changed the meaning of this file` at the first reordered import. So the rewrite
+ * happens first, and only its own result is ever registered.
+ *
+ * The re-parse is also the pass's own guard: `organizeImportSection` returning text is not enough,
+ * because the text must parse. If it does not, that is a bug in this file rather than in the user's
+ * source, so the failure is allowed to propagate as a `MotokoSyntaxError` — reporting it as a
+ * formatter internal error would hide where it came from.
  */
 async function parse(
     text: string,
-    _options: ParserOptions,
+    options: ParserOptions,
 ): Promise<NormalBranch> {
-    const result = await parseMotoko(text);
+    const organized = options.motokoOrganizeImports
+        ? await organizeSource(text, options)
+        : null;
+    const result = organized ?? (await parseMotoko(text));
     rememberRoot(result);
     return result.root;
+}
+
+/**
+ * Run the organize pass and re-parse its output, or `null` when there is nothing to do.
+ *
+ * Split out so the main path reads as one decision ("organized or not"), and so the option's two
+ * reads — whether to run, and which spelling to emit — sit next to each other.
+ */
+async function organizeSource(
+    text: string,
+    options: ParserOptions,
+): Promise<ParseResult | null> {
+    const original = await parseMotoko(text);
+    const mode = options.motokoSyntax === 'moc2' ? 'moc2' : 'preserve';
+    const rewritten = await organizeImportSection(text, original.root, mode);
+    if (rewritten === null) return null;
+    return parseMotoko(rewritten);
 }
 
 /**

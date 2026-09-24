@@ -56,8 +56,31 @@ const OPTIONS = {
     trailingComma: 'none',
 } as const;
 
-function format(source: string): Promise<string> {
-    return prettier.format(source, OPTIONS);
+/**
+ * Extra options for one fixture **area**, keyed by the area directory's name.
+ *
+ * Most areas need none, and the default stays a single shared `OPTIONS` object. But an option that
+ * changes the shape of the output has to be exercised against fixtures, and there is no per-fixture
+ * place to put it: a fixture is just a `.mo` file, with no frontmatter and no sidecar. Hanging the
+ * option off the directory is the smallest hook that keeps fixtures plain files — the directory
+ * *is* the case name, which is already true of every other area here.
+ *
+ * `organize-imports/` is the reason this exists: `motokoOrganizeImports` rewrites the import
+ * section before the printer ever sees it, so its expectations cannot be expressed as an input
+ * file at all under the default options.
+ */
+const AREA_OPTIONS: Record<string, Record<string, unknown>> = {
+    'organize-imports': { motokoOrganizeImports: true },
+};
+
+/** The options a fixture at `path` is formatted under: the shared set plus its area's overrides. */
+function optionsFor(path: string): prettier.Options {
+    const area = relative(FIXTURE_ROOT, path).split('/')[0];
+    return { ...OPTIONS, ...(AREA_OPTIONS[area] ?? {}) };
+}
+
+function format(source: string, path: string): Promise<string> {
+    return prettier.format(source, optionsFor(path));
 }
 
 /** Every `.mo` file under `tests/format`, as `<area>/<file>.mo` so a failure names its area. */
@@ -92,13 +115,13 @@ describe.each(
 )('format/%s', (name, path) => {
     test('prints as snapshotted', async () => {
         const source = readFileSync(path, 'utf8');
-        await expect(format(source)).resolves.toMatchSnapshot();
+        await expect(format(source, path)).resolves.toMatchSnapshot();
     });
 
     test('is a fixed point', async () => {
         const source = readFileSync(path, 'utf8');
-        const once = await format(source);
-        const twice = await format(once);
+        const once = await format(source, path);
+        const twice = await format(once, path);
         // A bare `toBe` here prints two 100-line blobs and leaves the reader to diff them. The
         // first differing line is the whole content of the failure.
         expect(twice, firstDifferingLine(once, twice)).toBe(once);

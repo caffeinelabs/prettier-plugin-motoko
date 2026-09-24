@@ -690,3 +690,100 @@ let wide = {
 };
 "
 `;
+
+exports[`format/organize-imports/code-after.mo > prints as snapshotted 1`] = `
+"// The whole file is an import section followed by declarations; the pass must not touch anything
+// past the last import. Extra blank lines *within* the section collapse.
+import Array "mo:base/Array";
+
+let x = 5;
+let y = 10;
+"
+`;
+
+exports[`format/organize-imports/combine-same-path.mo > prints as snapshotted 1`] = `
+"// Three statements for one path fold into one: the plain binding stays its own statement, and the
+// destructured fields combine and sort. \`import Array ...\` must not be merged into the braces.
+import Array "mo:base/Array";
+import { filter; fold; map } "mo:base/Array";
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/comment-inside-import.mo > prints as snapshotted 1`] = `
+"// The pass must refuse this file, not rewrite it: the comment is a *child of the \`import\` branch*
+// (measured), so a pass reading only siblings would silently drop it. Refusal means the option is a
+// no-op here and the import is printed as written — comment, both fields, and the \`⛔\` path intact.
+// This is a real corpus shape: motoko/test/run/file-import.mo has exactly it.
+import {
+  debugPrint; /*encodeUtf8;*/
+  decodeUtf8
+} "mo:⛔";
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/comments.mo > prints as snapshotted 1`] = `
+"// A comment before the first import is the file's header and stays above the section. Comments
+// *inside* the section hoist to a block below the imports, which is the legacy suite's pinned
+// behaviour. Both are separated from the code by a blank line.
+// Base library imports
+import Array "mo:base/Array";
+import Text "mo:base/Text";
+
+import Utils "./utils";
+
+// Utility imports
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/empty-import-dropped.mo > prints as snapshotted 1`] = `
+"// An import binding nothing is dropped; the other import on the same path is not, and the
+// destructured one fills in the fields.
+import Array "mo:base/Array";
+import { filter; map } "mo:base/Array";
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/equals-spelling.mo > prints as snapshotted 1`] = `
+"// The \`=\` spelling is the Motoko 2.0 form. \`preserve\` keeps whichever spelling the source used,
+// on every statement of the section — including the bare-looking \`import Array\`, which is emitted
+// with \`=\` because the section as a whole was spelled that way.
+import Array = "mo:base/Array";
+import { map } = "mo:base/Array";
+import Text = "mo:base/Text";
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/group-by-prefix.mo > prints as snapshotted 1`] = `
+"// Sorted, grouped by path prefix with a blank line between groups, one blank line before the
+// declaration. The \`actor\` keeps this a whole program rather than an import-only file.
+import IC "ic:aaaaa-aa";
+
+import Core "canister:core";
+
+import Array "mo:base/Array";
+import Text "mo:base/Text";
+
+import Utils "./utils";
+
+actor {};
+"
+`;
+
+exports[`format/organize-imports/sort-fields.mo > prints as snapshotted 1`] = `
+"// Fields sort by name with the alias as tiebreak, so the aliased and bare entries interleave
+// rather than separating by form.
+import { alpha = a; filter; fold = foldFn; reduce; zulu = z } "mo:base/Array";
+
+actor {};
+"
+`;
