@@ -48,6 +48,7 @@ import type {
     NormalNode,
 } from '../parser/normalize.ts';
 import { verifyOutput } from '../verify.ts';
+import { controlDoc } from './control.ts';
 import { binaryChainDoc } from './exp.ts';
 import {
     betweenSeparator,
@@ -150,6 +151,10 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
         nodeDoc(child, ctx),
     );
     if (chain !== null) return chain;
+    const control = controlDoc(node as NormalBranch, (child) =>
+        nodeDoc(child, ctx),
+    );
+    if (control !== null) return control;
     return branchDoc(node, ctx);
 }
 

@@ -87,24 +87,23 @@ test('there are fixtures to check', () => {
     expect(FILES.length).toBeGreaterThan(0);
 });
 
-describe.each(FILES.map((path) => [relative(FIXTURE_ROOT, path), path] as const))(
-    'format/%s',
-    (name, path) => {
-        test('prints as snapshotted', async () => {
-            const source = readFileSync(path, 'utf8');
-            await expect(format(source)).resolves.toMatchSnapshot();
-        });
+describe.each(
+    FILES.map((path) => [relative(FIXTURE_ROOT, path), path] as const),
+)('format/%s', (name, path) => {
+    test('prints as snapshotted', async () => {
+        const source = readFileSync(path, 'utf8');
+        await expect(format(source)).resolves.toMatchSnapshot();
+    });
 
-        test('is a fixed point', async () => {
-            const source = readFileSync(path, 'utf8');
-            const once = await format(source);
-            const twice = await format(once);
-            // A bare `toBe` here prints two 100-line blobs and leaves the reader to diff them. The
-            // first differing line is the whole content of the failure.
-            expect(twice, firstDifferingLine(once, twice)).toBe(once);
-        });
-    },
-);
+    test('is a fixed point', async () => {
+        const source = readFileSync(path, 'utf8');
+        const once = await format(source);
+        const twice = await format(once);
+        // A bare `toBe` here prints two 100-line blobs and leaves the reader to diff them. The
+        // first differing line is the whole content of the failure.
+        expect(twice, firstDifferingLine(once, twice)).toBe(once);
+    });
+});
 
 /** A one-line "line N: expected / actual" note, or a note that the outputs differ only in length. */
 function firstDifferingLine(a: string, b: string): string {
