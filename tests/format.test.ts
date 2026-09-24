@@ -16,17 +16,8 @@ const OPTIONS: prettier.Options = {
     trailingComma: 'none',
 };
 
-const AREA_OPTIONS: Record<string, Record<string, unknown>> = {
-    'organize-imports': { motokoOrganizeImports: true },
-};
-
-function optionsFor(path: string): prettier.Options {
-    const area = relative(FIXTURE_ROOT, path).split('/')[0];
-    return { ...OPTIONS, ...(AREA_OPTIONS[area] ?? {}) };
-}
-
-function format(source: string, path: string): Promise<string> {
-    return prettier.format(source, optionsFor(path));
+function format(source: string): Promise<string> {
+    return prettier.format(source, OPTIONS);
 }
 
 function fixtures(dir: string = FIXTURE_ROOT, out: string[] = []): string[] {
@@ -55,13 +46,13 @@ describe.each(
 )('format/%s', (name, path) => {
     test('prints as snapshotted', async () => {
         const source = readFileSync(path, 'utf8');
-        await expect(format(source, path)).resolves.toMatchSnapshot();
+        await expect(format(source)).resolves.toMatchSnapshot();
     });
 
     test('is a fixed point', async () => {
         const source = readFileSync(path, 'utf8');
-        const once = await format(source, path);
-        const twice = await format(once, path);
+        const once = await format(source);
+        const twice = await format(once);
         expect(twice, firstDifferingLine(once, twice)).toBe(once);
     });
 });

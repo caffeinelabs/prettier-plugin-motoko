@@ -24,7 +24,6 @@ const languages: SupportLanguage[] = [
 
 async function parse(text: string): Promise<NormalBranch> {
     const result = await parseMotoko(text);
-    // The printer's runtime guard compares its output against this tree, so it needs the source too.
     rememberRoot(result);
     return result.root;
 }
