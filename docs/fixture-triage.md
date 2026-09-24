@@ -361,7 +361,7 @@ Against the 102 names and 323 cases measured above:
   and the rule is applied uniformly by the printer and pinned once by `docs/semicolons.md`'s own
   cases. Re-encoding those 20 names would be 20 copies of one assertion, so they are **not** in the
   table below and get no fixture.
-- The 39 names become **98 files** (95 under `tests/format/port/`, 3 under
+- The 39 names become **94 files** (91 under `tests/format/port/`, 3 under
   `tests/format/organize-imports/`). 27 names compose into one file each; **12 do not**, and get one
   file per case. Composition is _measured_, not assumed — a legacy case is often a fragment
   (`1*1`, `? ?a`, `A\n|> B`) and two fragments can concatenate into a program neither one was.
@@ -369,6 +369,20 @@ Against the 102 names and 323 cases measured above:
   among its cases, and joining them puts a `?` and a `?` in positions the source never had — the
   exact token pair that family is about. So the generator joins each name's cases, formats the join,
   and keeps it as one file only if the join formats _and_ is a fixed point.
+- The 104 need-fixture cases and the 94 files are two different numbers, and the gap is deliberate.
+  **62 of the 104 sit in the 27 composed names**, where one file carries the whole name — so those
+  62 cases cost 27 files. The other **42 sit in the 12 names that do not compose**, and each of
+  those 42 gets its own file. That is 27 + 42 = 69 files… except the split path writes **one file per
+  _case_, not per need-fixture case**, so the 12 names contribute 67 files, not 42: the 42 that need
+  a fixture plus 25 that are `keep` or semicolon-only and ride along because splitting a name
+  cannot drop its siblings without misrepresenting what 0.13 was given. 27 + 67 = 94.
+
+    The apparent alternative — filter the split path to just the need-fixture cases — was measured and
+    **rejected**: it would write 104 files instead of 94, i.e. it would turn each composed name's
+    single file into one file per case, and it would leave `null coalesce operator` (20 cases, 18
+    needing a file) as 18 files instead of 20, silently dropping the two `keep` cases that are the
+    control for the eighteen. A fixture set is easier to review when a file says "here is what 0.13
+    was given for this name", which is what the legacy test did.
 
 The names needing a fixture, most-work first (`chg` and `del` are the change and delete counts the
 verdicts assigned; `need` is the subset of `chg` that requires its own file — the arithmetic is in
@@ -424,7 +438,7 @@ is one behaviour, not 35.
 
 ### What the generated fixtures do not assert
 
-Seven of the 98 bodies are **fragments moc rejects on their own** — a bare `case x => y` needs the
+Seven of the 94 bodies are **fragments moc rejects on their own** — a bare `case x => y` needs the
 `switch` around it (`wildcard identifier`), a top-level `return` needs a function
 (`addition vs. positive number`, `subtraction vs. negative number`), a `let (fst, snd) =` needs
 its right-hand side, and `import with missing semicolon at end` is the organize case the pass

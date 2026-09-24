@@ -90,10 +90,27 @@ const slug = (name: string) =>
         .replace(/^-+|-+$/g, '')
         .toLowerCase();
 
+/**
+ * The recorder's sentinel, which is **not** a legacy input.
+ *
+ * `tools/legacy-extract.mjs` stubs `prettier.format` to return `__sentinel_N__` while it replays a
+ * suite, so a test that formats its own expected value records that placeholder as the input of the
+ * inner call. `tests/legacy/formatter.test.ts` has one: `expectFormatted` is
+ * `expect(await format(input)).toStrictEqual(input)`, so the outer call's sentinel comes back to
+ * `format` as an argument. Four of the 323 recorded calls are that artifact, all under
+ * `double newline after import section`.
+ *
+ * They cannot be fixtures: the body would be the literal text `__sentinel_273__`, which was never a
+ * legacy input and asserts nothing about the printer. Dropping them is not "deleting a case" — the
+ * case's real input is already in the ledger under its own index, extracted from the outer call.
+ */
+const isSentinel = (input: string) => /^__sentinel_\d+__$/.test(input.trim());
+
 /** The resolved cases of each name, in ledger order — a throwing case cannot be a fixture. */
 const casesByName = new Map<string, any[]>();
 for (const c of ledger.cases) {
     if (c.threw) continue;
+    if (isSentinel(c.input)) continue;
     if (!casesByName.has(c.name)) casesByName.set(c.name, []);
     casesByName.get(c.name)!.push(c);
 }
