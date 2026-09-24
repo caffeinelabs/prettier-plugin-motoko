@@ -12,6 +12,7 @@ const roots = [
     join(repoRoot, '..', 'motoko-core', 'src'),
 ];
 
+// Valid Motoko the grammar can't parse yet: an `@`-privileged name, and a spaced `List <T>`.
 const KNOWN_REJECTIONS = new Set([
     'motoko/test/run-drun/timer.mo',
     'motoko/test/perf/qr/list.mo',
