@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 
 import prettier from 'prettier';
 import { describe, expect, test } from 'vitest';
@@ -70,19 +71,22 @@ describe.skipIf(files.length === 0)('corpus', () => {
         expect(rejected.sort()).toEqual([...KNOWN_REJECTIONS].sort());
     });
 
-    test(
-        'every file that parses formats, formatting again changes nothing, and motoko-core, already formatted, is unchanged',
+    test.each(['preserve', 'moc2'])(
+        '%s: every file that parses formats, formatting again changes nothing, and under preserve motoko-core, already formatted, is unchanged',
         { timeout: 300_000 },
-        async () => {
+        async (motokoSyntax) => {
             const failures: string[] = [];
             const unstable: string[] = [];
             const changed: string[] = [];
             for (const file of files) {
+                // A long run that never yields starves vitest's worker RPC, which then times out.
+                await setImmediate();
                 const source = readFileSync(file, 'utf8');
                 const options = {
                     parser: 'motoko',
                     plugins: [plugin],
                     filepath: file,
+                    motokoSyntax,
                 };
                 let once: string;
                 try {
@@ -98,7 +102,11 @@ describe.skipIf(files.length === 0)('corpus', () => {
                 if ((await prettier.format(once, options)) !== once) {
                     unstable.push(display(file));
                 }
-                if (file.startsWith(core) && once !== source) {
+                if (
+                    motokoSyntax === 'preserve' &&
+                    file.startsWith(core) &&
+                    once !== source
+                ) {
                     changed.push(display(file));
                 }
             }
