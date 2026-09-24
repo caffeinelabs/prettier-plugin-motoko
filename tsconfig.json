@@ -16,7 +16,6 @@
         "forceConsistentCasingInFileNames": true,
         "verbatimModuleSyntax": true,
         "skipLibCheck": true,
-        // Sources import siblings as `.ts`, so tests and tools run them unbuilt. Emit rewrites the specifiers to `.js`.
         "allowImportingTsExtensions": true,
         "rewriteRelativeImportExtensions": true
     },

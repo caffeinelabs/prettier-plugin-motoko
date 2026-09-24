@@ -1,5 +1,3 @@
-/** `parse()` either returns a tree that reproduces its input exactly, or throws a located `MotokoSyntaxError`. */
-
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -13,7 +11,6 @@ import { HEAD_SYMBOL_IDS } from '../src/parser/nodes.generated.ts';
 async function parseAndCheck(source: string) {
     const { root } = await parse(source);
     expect(checkRoundTrip(root, source)).toBeNull();
-    // The root must cover the whole file, or `locStart`/`locEnd` cannot address every character.
     expect(root.text).toBe(source);
     expect(root.startIndex).toBe(0);
     expect(root.endIndex).toBe(source.length);
@@ -38,7 +35,6 @@ describe('parse: accepted input', () => {
         ['a switch', 'switch (x) { case (1) 2; case (_) 3 };\n'],
         ['a module', 'module { public let x = 1; };\n'],
         ['a nested function', 'func f() { func g() { 1 } };\n'],
-        // Non-ASCII is where a wrong offset convention would show.
         ['multi-byte characters in a string', 'let x = "é你好"; // é你\n'],
         ['characters outside the BMP', 'let s = "😀🎉";\n'],
         ['a backslash escape', 'let s = "a\\nb\\t\\"c";\n'],
@@ -94,7 +90,6 @@ describe('parse: mode aliases', () => {
     });
 
     test('a head-mode node aliased to a bare name still reports mode "block"', async () => {
-        // `not_exp` carries no suffix in head position, so only `grammarId` shows it is a head.
         const { root } = await parse('let a = if not x { 1 } else { 2 };\n');
         const shape = shapeOf(root);
         expect(hasKind(shape, 'not_exp')).toBe(true);
@@ -155,9 +150,7 @@ describe('parse: rejected input', () => {
             '/* never closed\n',
             /Missing `\*\/`/,
         ],
-        // moc rejects a doubled separator too.
         ['a doubled semicolon', 'let x = 1;;\n', /Unexpected input/],
-        // moc rejects it too. The grammar recovers with a zero-width node and no `isError` anywhere.
         [
             'include with no expression',
             'import I "x";\ninclude I;\n',
@@ -184,7 +177,6 @@ describe('parse: rejected input', () => {
         expect(error).toBeInstanceOf(MotokoSyntaxError);
         const syntaxError = error as MotokoSyntaxError;
         expect(syntaxError.loc.start.line).toBe(1);
-        // On the `@`, not on the `=` the outer ERROR node starts at.
         expect(syntaxError.loc.start.column).toBe(9);
         expect(syntaxError.codeFrame).toContain('let x = @@@ ;');
         expect(syntaxError.codeFrame).toContain('^');
@@ -203,7 +195,6 @@ describe('parse: rejected input', () => {
     });
 });
 
-/** `shapeOf` collapses branches to `[kind, mode?, children]`. */
 function hasKind(node: unknown, kind: string): boolean {
     if (!Array.isArray(node)) return false;
     if (node[0] === kind) return true;
@@ -211,7 +202,6 @@ function hasKind(node: unknown, kind: string): boolean {
     return Array.isArray(kids) && kids.some((c) => hasKind(c, kind));
 }
 
-/** The mode of the first node of `kind` that has one, or `undefined`. */
 function modeOf(node: unknown, kind: string): string | undefined {
     if (!Array.isArray(node)) return undefined;
     if (node[0] === kind)

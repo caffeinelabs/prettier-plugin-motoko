@@ -4,13 +4,11 @@ import { createParser } from './tree-sitter.ts';
 import { normalize } from './normalize.ts';
 import type { NormalBranch, NormalChild } from './normalize.ts';
 
-/** 1-based line and column, as Prettier's code frame expects. */
 export interface SyntaxErrorLocation {
     start: { line: number; column: number };
     end?: { line: number; column: number };
 }
 
-/** Prettier renders its own code frame from `loc`, replacing `codeFrame`. */
 export class MotokoSyntaxError extends SyntaxError {
     readonly loc: SyntaxErrorLocation;
     readonly codeFrame: string;
@@ -34,12 +32,7 @@ export interface ParseResult {
     source: string;
 }
 
-/**
- * The innermost `ERROR` or `MISSING` node, in source order.
- *
- * tree-sitter wraps a bad token in an outer `ERROR` spanning the failed construct (`let x = @@@;` gives `ERROR "= @@@"` around `ERROR "@@@"`),
- * so an error is reported only when none of its descendants is one. Only the first is reported: the rest are usually its cascade.
- */
+// tree-sitter nests the bad token's `ERROR` inside one spanning the failed construct, so report the innermost.
 function findProblem(root: NormalBranch): Problem | null {
     function walk(
         n: NormalChild,
@@ -64,8 +57,7 @@ function findProblem(root: NormalBranch): Problem | null {
         if (n.nodeType === 'Token') return null;
 
         const flagged = n.hasError ? n : enclosing;
-        // A zero-width branch under `hasError` is a recovery site with no flagged node in it.
-        // `include I;` reaches this: the grammar recovers by inserting an empty `float_literal`.
+        // Zero-width recovery site with no flagged node below, e.g. `include I;` gets an empty `float_literal`.
         if (n.startIndex === n.endIndex && flagged) {
             return { kind: 'error', name: flagged.type, node: flagged };
         }
@@ -112,10 +104,6 @@ function syntaxError(source: string, problem: Problem): MotokoSyntaxError {
     );
 }
 
-/**
- * Parse Motoko source into a normalised tree.
- * Throws `MotokoSyntaxError` unless the grammar accounts for the whole input: a recovered tree is not the program the user wrote.
- */
 export async function parse(source: string): Promise<ParseResult> {
     const parser = await createParser();
     let tree: Tree | null;

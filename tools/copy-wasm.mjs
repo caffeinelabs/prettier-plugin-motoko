@@ -1,4 +1,3 @@
-// Copies the two wasm files the parser loads next to the compiled `lib/parser/` module.
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 

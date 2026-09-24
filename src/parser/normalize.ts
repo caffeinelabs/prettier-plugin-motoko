@@ -1,23 +1,13 @@
-/**
- * The normalised tree: plain objects with no wasm handles, safe to keep after the tree-sitter `Tree` is freed.
- *
- * Tokens are first-class children and the whitespace between them is kept as `Text` gaps,
- * so concatenating the leaves reproduces the source exactly (`checkRoundTrip`).
- * Comments stay in the tree as ordinary children; the printer decides where they go.
- */
-
 import type { Node as TsNode, Point } from 'web-tree-sitter';
 
 import { HEAD_SYMBOL_IDS, NODE_KINDS } from './nodes.generated.ts';
 import type { NodeKind, NodeMode } from './nodes.generated.ts';
 
-/** `row` is 0-based; `column` counts UTF-16 code units. */
 export interface NormalPoint {
     row: number;
     column: number;
 }
 
-/** Offsets are UTF-16 code units, the addressing of `String.prototype.slice` and of Prettier's `locStart`. */
 export interface NormalSpan {
     startIndex: number;
     endIndex: number;
@@ -25,40 +15,28 @@ export interface NormalSpan {
     endPosition: NormalPoint;
 }
 
-/** A leaf: a named token (`identifier`) or an anonymous one (`{`, `;`, `if`). */
 export interface NormalToken extends NormalSpan {
     nodeType: 'Token';
     type: string;
     named: boolean;
     extra: boolean;
     text: string;
-    /** Unmatched input. */
     error: boolean;
-    /** A zero-width token the grammar required but the source lacked. */
     missing: boolean;
 }
 
 export interface NormalBranch extends NormalSpan {
     nodeType: 'Branch';
-    /** The name as the tree reports it, e.g. `call_exp_object`. */
     type: string;
-    /** `type` without its mode suffix, e.g. `call_exp`. */
     kind: NodeKind;
     mode: NodeMode | null;
-    /** The rule that produced the node before aliasing; the only reliable marker of head mode (see `modeOf`). */
     grammarId: number;
     named: boolean;
     extra: boolean;
-    /** Field name of this node in its parent. */
     field: string | null;
-    /** Children in source order, tokens and `Text` gaps included. */
     children: NormalChild[];
     error: boolean;
     missing: boolean;
-    /**
-     * Some node at or below here failed to match.
-     * The grammar can recover by inserting a zero-width node and flagging only the enclosing one, so this can be set with no `error`/`missing` below it.
-     */
     hasError: boolean;
     text: string;
 }
@@ -67,7 +45,6 @@ export type NormalNode = NormalToken | NormalBranch;
 
 export type NormalChild = NormalNode | NormalText;
 
-/** Whitespace no child covers. Comments are tree children, so a gap never holds one. */
 export interface NormalText extends NormalSpan {
     nodeType: 'Text';
     text: string;
@@ -75,10 +52,7 @@ export interface NormalText extends NormalSpan {
 
 const MODE_SUFFIXES: readonly string[] = ['_block', '_object'];
 
-/**
- * `comment_text` is lexed one character per hidden token, so its span is not the union of its visible children.
- * Slicing it from the source is the only exact way to get its text; a nested block comment becomes characters inside it.
- */
+// `comment_text` is lexed one character per hidden token, so only a source slice gives its exact text.
 const SOURCE_TEXT_KINDS: ReadonlySet<string> = new Set(['comment_text']);
 
 function stripModeSuffix(type: string): {
@@ -96,16 +70,10 @@ function stripModeSuffix(type: string): {
             }
         }
     }
-    // Unchecked: a kind missing from `NODE_KINDS` means `gen:node-types` is stale.
     return { kind: type as NodeKind, mode: null };
 }
 
-/**
- * Head mode can't be read off the visible name.
- * The grammar registers head rules as `<name>_head` and aliases them onto either the bare name (`par_exp`) or the `_block` name (`call_exp_block`),
- * so membership of `grammarId` in `HEAD_SYMBOL_IDS` is the only sound test.
- * Head mode is reported as `block`; it decides whether a following `{` opens a body or a record.
- */
+// Head rules alias onto ordinary names (`par_exp`, `call_exp_block`), so only `grammarId` reveals head mode.
 function modeOf(node: TsNode): { kind: NodeKind; mode: NodeMode | null } {
     const stripped = stripModeSuffix(node.type);
     if (HEAD_SYMBOL_IDS.has(node.grammarId)) {
@@ -136,7 +104,6 @@ function endPointOf(text: string): NormalPoint {
             row += 1;
             column = 0;
         } else if (c === 13) {
-            // `\r\n` counts once: the `\n` does the increment.
             if (text.charCodeAt(i + 1) !== 10) {
                 row += 1;
                 column = 0;
@@ -148,12 +115,6 @@ function endPointOf(text: string): NormalPoint {
     return { row, column };
 }
 
-/**
- * Normalise a tree-sitter tree into plain objects.
- *
- * The root is widened to the whole input: `source_file` starts at its first token,
- * but `root.text` must equal `source` for the round-trip, and Prettier must be able to address every character.
- */
 export function normalize(root: TsNode, source: string): NormalBranch {
     function buildChildrenOf(
         node: TsNode,
@@ -168,7 +129,6 @@ export function normalize(root: TsNode, source: string): NormalBranch {
             if (end <= start) return;
             const text = source.slice(start, end);
             if (text.trim() !== '') {
-                // A token that is not a child of the tree would make the round-trip lossy.
                 throw new Error(
                     `normalize: unexpected non-whitespace between nodes at [${start},${end}): ` +
                         JSON.stringify(text.slice(0, 40)),
@@ -180,12 +140,10 @@ export function normalize(root: TsNode, source: string): NormalBranch {
         for (let i = 0; i < kids.length; i += 1) {
             const child = kids[i];
             gap(previous ? previous.endIndex : from, child.startIndex, child);
-            // `fieldNameForChild` counts anonymous tokens too, which is what `i` counts.
             out.push(buildChild(child, node.fieldNameForChild(i)));
             previous = child;
         }
 
-        // A node's span can run past its last child, e.g. trailing whitespace of a file.
         gap(previous ? previous.endIndex : from, to, node);
 
         return out;
@@ -263,10 +221,6 @@ export function normalize(root: TsNode, source: string): NormalBranch {
     );
 }
 
-/**
- * Check that the leaves and gaps, in order, tile `source` exactly. Their texts are slices of it, so this proves the normaliser lost nothing.
- * Returns the first mismatch, or `null`.
- */
 export function checkRoundTrip(
     node: NormalNode,
     source: string,
@@ -304,7 +258,6 @@ export function checkRoundTrip(
     return null;
 }
 
-/** A position-free shape for structural comparison: node kinds, modes and token texts, without whitespace gaps. */
 export function shapeOf(node: NormalChild): unknown {
     if (node.nodeType === 'Text') return null;
     if (node.nodeType === 'Token') {

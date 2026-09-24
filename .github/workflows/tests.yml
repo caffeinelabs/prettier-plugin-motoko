@@ -3,7 +3,6 @@ name: Tests
 on:
     push:
         branches: ['main']
-    # Every PR, so stacked PRs get CI too.
     pull_request:
 
 concurrency:
@@ -28,7 +27,6 @@ jobs:
                   cache: 'npm'
             - run: npm ci
             - run: npm run format:check
-            # A grammar bump must regenerate the node types in the same commit.
             - run: npm run gen:node-types:check
 
     test:
@@ -57,7 +55,6 @@ jobs:
                   MOTOKO_CORPUS_REQUIRED: 1
             - run: npm run build
 
-    # The single required check, so adding or renaming a job needs no settings change.
     required:
         name: ci:required
         runs-on: ubuntu-latest

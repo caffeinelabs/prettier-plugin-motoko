@@ -1,10 +1,3 @@
-/**
- * Every corpus file either parses and round-trips exactly, or is a known grammar rejection.
- *
- * The corpus is the compiler's `test/` and motoko-core's `src/`, checked out as siblings of this repo (CI pins both revisions).
- * Without them the suite is skipped, unless `MOTOKO_CORPUS_REQUIRED` is set, which CI does so a broken checkout can't pass vacuously.
- */
-
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -19,15 +12,11 @@ const roots = [
     join(repoRoot, '..', 'motoko-core', 'src'),
 ];
 
-/** Files outside `test/fail` that moc accepts and the grammar rejects. A new entry is a grammar regression. */
 const KNOWN_REJECTIONS = new Set([
-    // `@`-privileged names: `privileged_identifier` is unreachable in the grammar.
     'motoko/test/run-drun/timer.mo',
-    // A spaced type instantiation, `List <T>`.
     'motoko/test/perf/qr/list.mo',
 ]);
 
-// The compiler's build output would duplicate sources. `lib/` is kept: it holds real modules other tests import.
 const SKIP_DIRS = new Set(['_out', '_build', 'node_modules', '.git']);
 
 function walk(dir: string, out: string[] = []): string[] {

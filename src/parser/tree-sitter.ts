@@ -1,10 +1,3 @@
-/**
- * Lazy, memoised initialisation of web-tree-sitter and the Motoko grammar.
- *
- * The build copies both wasm files next to the compiled module (`lib/parser/`), so an installed plugin never resolves the grammar package,
- * whose install script builds native bindings. From source (tests, tools) they are resolved from the installed packages instead.
- */
-
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -50,7 +43,6 @@ async function loadLanguage(): Promise<Language> {
 
 let languagePromise: Promise<Language> | null = null;
 
-/** The compiled grammar. A failed load is not cached, so the next call retries. */
 export function getLanguage(): Promise<Language> {
     if (!languagePromise) {
         languagePromise = loadLanguage();
@@ -61,9 +53,7 @@ export function getLanguage(): Promise<Language> {
     return languagePromise;
 }
 
-/** A new parser bound to the Motoko grammar. The caller must `delete()` it. */
 export async function createParser(): Promise<Parser> {
-    // `Parser.init()` must finish before the constructor runs.
     const language = await getLanguage();
     const parser = new Parser();
     parser.setLanguage(language);
