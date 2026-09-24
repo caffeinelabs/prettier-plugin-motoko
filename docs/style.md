@@ -599,29 +599,28 @@ let o = {
 
 - When a line comment is itself a list item, the **separator goes on the line
   after it**, not on the comment's line. A `//` runs to the newline, so a
-  separator printed after one is *inside* the comment and the list loses it.
+  separator printed after one is _inside_ the comment and the list loses it.
   This is a correctness rule rather than a taste one: the printer used to emit
   `// c,` here, which drops the comma, and it did so on input `moc` accepts.
+  The corpus writes leading separators already (`test/repl/lib/type-lub.mo`
+  leads seven lines with `,`), and `moc` accepts both spellings, so this is a
+  layout change and not a spelling one. A **block** comment is not this case: it
+  ends at its own delimiter, so a separator after it is already outside and
+  stays glued to the item — which is why the rule keys on the comment's kind and
+  not on "the item contains a comment".
 
-```motoko no-repl
-// before — the comment is the item, so the comma must lead its own line
-let g = call(a // c
-             , b);
-// after
-let g = call(
-  a
-  // c
-  ,
-  b
-);
-```
-
-  The corpus writes leading separators already
-  (`test/repl/lib/type-lub.mo` leads seven lines with `,`), and `moc` accepts
-  both spellings, so this is a layout change and not a spelling one. A **block**
-  comment is not this case: it ends at its own delimiter, so a separator after
-  it is already outside and stays glued to the item — which is why the rule
-  keys on the comment's kind and not on "the item contains a comment".
+    ```motoko no-repl
+    // before — the comment is the item, so the comma must lead its own line
+    let g = call(a // c
+                 , b);
+    // after
+    let g = call(
+      a
+      // c
+      ,
+      b
+    );
+    ```
 
 - Comment attachment follows Prettier's model. The tree-sitter parser's tree is
   flattened to plain objects and the comments are hoisted into `ast.comments`;
@@ -726,7 +725,21 @@ rests on a single piece of evidence.
 6. **Record-literal inner spacing** (ruling 1). If the tree-sitter corpus's
    no-space form turns out to dominate, this ruling is the one to revisit;
    `bracketSpacing` already makes it a one-line change to the printer.
-7. **Blank line inside an empty broken block** (`format('{\n\n}')` →
-   `'{\n\n};\n'`). This is a ported fixture, so it must hold, but it is odd
-   enough to be worth a second look — a truly empty block arguably should
-   collapse.
+7. **Blank line inside an empty broken block.** The ported fixture asserts
+   `format('{\n\n}')` → `'{\n\n};\n'`, and the two halves of that assertion have
+   different statuses — measured (`.probe/_emptyblk.mts`, `.probe/_emptyblk2.mts`):
+
+    - The **blank line holds**: `'{\n\n}'` → `'{\n\n}\n'`. This is `preserve`'s, and
+      it is pure whitespace, so `shapeOf` cannot see it either way. A `'{ }'` or a
+      `'{\n}'` does collapse to `'{}'`, so the blank line is specifically the thing
+      being preserved, not a general "keep the body open" rule.
+    - The **trailing `;` is not added**: the fixture's `'{\n\n};\n'` is not what
+      `preserve` produces, and it must not be. A separator is a token the guard
+      compares, so adding one is a rewrite; the `;` in that fixture is a `moc2`
+      cell, as §"Interaction with the ported fixture expectations" already says.
+      The ported expectation is therefore an M3 expectation, not an M2 one, and
+      the M2 fixture is the blank-line half only.
+
+    The odd part worth a second look is whether an empty block should collapse at
+    all, which is the same question as the collapsing `'{ }'` case above and is
+    answered by the ported fixture rather than by taste.
