@@ -268,11 +268,11 @@ export function createPrinter(): Printer<NormalChild> {
             node.nodeType === 'Branch' ? ['children'] : [],
 
         print: (path: AstPath<NormalChild>, options: ParserOptions) => {
-            const ctx: WalkOptions = {
-                lines: options.originalText.split('\n'),
-            };
-
             const node = path.node;
+            // The parsed source, not `originalText`: a rewrite or organize pass may have changed it.
+            const source = ROOTS.get(node)?.source ?? options.originalText;
+            const ctx: WalkOptions = { lines: source.split('\n') };
+
             if (!path.isRoot || node.nodeType !== 'Branch') {
                 return nodeDoc(node, ctx);
             }

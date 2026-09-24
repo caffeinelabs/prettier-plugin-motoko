@@ -1,8 +1,16 @@
-import type { Parser, Plugin, Printer, SupportLanguage } from 'prettier';
+import type {
+    Parser,
+    ParserOptions,
+    Plugin,
+    Printer,
+    SupportLanguage,
+    SupportOptions,
+} from 'prettier';
 
 import { parse as parseMotoko } from './parser/parse.ts';
 import type { NormalBranch, NormalChild } from './parser/normalize.ts';
 import { createPrinter, rememberRoot } from './printer/walk.ts';
+import { rewriteMoc2 } from './rewrite/moc2.ts';
 
 export const AST_FORMAT = 'motoko-ast';
 
@@ -22,8 +30,30 @@ const languages: SupportLanguage[] = [
     },
 ];
 
-async function parse(text: string): Promise<NormalBranch> {
-    const result = await parseMotoko(text);
+const options: SupportOptions = {
+    motokoSyntax: {
+        category: 'Motoko',
+        type: 'choice',
+        default: 'preserve',
+        description: 'Which Motoko syntax to print.',
+        choices: [
+            { value: 'preserve', description: 'Keep the syntax as written.' },
+            {
+                value: 'moc2',
+                description:
+                    'Rewrite legacy syntax to the moc 2.0 forms. May change between minors while moc 2.0 is in beta.',
+            },
+        ],
+    },
+};
+
+async function parse(
+    text: string,
+    options: ParserOptions,
+): Promise<NormalBranch> {
+    const source =
+        options.motokoSyntax === 'moc2' ? await rewriteMoc2(text) : text;
+    const result = await parseMotoko(source);
     rememberRoot(result);
     return result.root;
 }
@@ -44,8 +74,8 @@ const printers: Record<string, Printer> = {
     [AST_FORMAT]: createPrinter() as Printer,
 };
 
-const plugin: Plugin = { languages, parsers, printers };
+const plugin: Plugin = { languages, options, parsers, printers };
 
-export { languages, parsers, printers };
+export { languages, options, parsers, printers };
 
 export default plugin;
