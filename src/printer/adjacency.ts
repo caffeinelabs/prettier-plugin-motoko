@@ -267,17 +267,26 @@ export function comparisonOp(op: string): Doc {
  * The token is `alias(token(/\?\?[ \t\r\n]/), "??")` — **the trailing whitespace is part of
  * the token**. Three consequences the printer must respect:
  *
- *   - C2/C3: `a ??b` and `a??b` are syntax errors on all three parsers, because the regex
- *     needs a trailing space character to match. So the space after is mandatory.
- *   - C4: `a ??\nb` is *also* a syntax error, since `\f`/`\v` are not in the class and a
- *     newline after `??` is not the same token as a space after it. The break must go
- *     *before* the operator, never after.
+ *   - C2/C3: `a ??b` and `a??b` are rejected, because the regex needs a trailing space
+ *     character to match. So the space after is mandatory.
+ *   - C4: the break must go *before* the operator, never after. Measured on all four
+ *     spellings (`.probe/_coalverify.mts`), and the reason is **not** that moc rejects
+ *     `a ??\nb`: tree-sitter parses it and moc 1.16.1 reports zero syntax errors and builds
+ *     `NullCoalesceE`. What rejects it is this repo's own guard — `shapeOf` compares a
+ *     token's `text`, and `a ??\nb` re-parses to a token spelled `"??\n"` where the input
+ *     had `"?? "`. The conclusion stands and the mechanism is the guard. (`a ?? \nb`, a
+ *     break after a *space*, keeps the token text and matches the guard, but produces
+ *     trailing whitespace, so it is not the spelling to emit either.)
  *   - The space before is free (`a ?? b` and `a?? b` both parse). We emit one, because a
  *     glued `??` on the left is what C7 misreads in moc 1.x as two `?` tokens.
  *
  * `line` after `??` would be legal Doc IR but illegal Motoko, so this returns the space as
  * a literal string rather than a `line`: there is no width at which breaking here is
  * correct.
+ *
+ * The single caller is `exp.ts`'s `coalesceDoc`, which is the only place a `??` chain is
+ * laid out — before it, `coalesce_exp` was not in `OP_KINDS` and a chain fell through to the
+ * source-gap printer and overran `printWidth`.
  */
 export function coalesceOperator(op: string): Doc {
     return [line, op, ' '];

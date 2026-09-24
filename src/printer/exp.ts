@@ -62,7 +62,11 @@
 import { doc } from 'prettier';
 import type { Doc } from 'prettier';
 
-import { breakAfterOperator, isIndivisible } from './adjacency.ts';
+import {
+    breakAfterOperator,
+    coalesceOperator,
+    isIndivisible,
+} from './adjacency.ts';
 import type { NormalBranch, NormalChild } from '../parser/normalize.ts';
 
 const { group, indent, line } = doc.builders;
@@ -76,6 +80,16 @@ const { group, indent, line } = doc.builders;
  * what the generated types are keyed by.
  */
 const OP_KINDS = new Set(['bin_op', 'rel_op']);
+
+/**
+ * `??`'s node kind, and the operator spelling it prints as.
+ *
+ * Named rather than inlined because the kind shows up in three places in `planCoalesce` alone, and
+ * because `coalesce_exp` is deliberately *not* in `OP_KINDS`: it is not one of the grammar's
+ * no-precedence binary levels, so it has its own flattener below rather than sharing `planChain`'s.
+ */
+const COALESCE_KIND = 'coalesce_exp';
+const COALESCE_OP = '??';
 
 /**
  * The operator a node prints as, or `null` if it is not a plain operator.
@@ -211,6 +225,93 @@ function planChain(node: NormalBranch): Chain | null {
 }
 
 /**
+ * Flatten a `??` chain, or `null` if any level has an unexpected shape.
+ *
+ * ## Why this is not `planChain` with a different kind set
+ *
+ * `coalesce_exp` is its own grammar node, not a `bin_exp`, so `planChain` never sees a `??` chain and
+ * the whole thing falls through to the source-gap printer — which reproduces the source's *spaces*,
+ * and a space never breaks. A `??` chain that does not fit therefore stayed over `printWidth`
+ * forever. Measured before this function existed:
+ *
+ *     let x = aaaaaaaaaaaaaaa ?? bbbbbbbbbbbbbbb ?? ccccccccccccccc ?? …   // 101 chars at width 80
+ *
+ * Two structural differences from `planChain`, both of which are why it is a separate walk rather
+ * than a branch inside it:
+ *
+ *  - **The spine leans right, not left.** `a ?? b ?? c` is `coalesce_exp(a, coalesce_exp(b, c))` —
+ *    probed with `.probe/_coalshape.mts`, and the opposite of the grammar's no-precedence binary
+ *    levels, which lean left. So the walk descends the **right** operand, where `planChain` descends
+ *    the left — and that in turn is why this walk *appends* its operands where `planChain` prepends:
+ *    a left-leaning walk meets its operands back to front, a right-leaning one meets them in order.
+ *  - **The node has four children, not five**, and the operator is a bare `Token` rather than a
+ *    `Branch` wrapping one: `[left, Text, op, right]`.
+ *
+ * ## The trailing space in the operator token, which is the whole hazard
+ *
+ * The lexer's rule is `alias(token(/\?\?[ \t\r\n]/), "??")` — **the trailing whitespace is part of
+ * the token** — and `shapeOf` compares a token's `text` exactly. So the guard sees `"?? "` when a
+ * space follows and something else when anything else does. Measured on all four spellings
+ * (`.probe/_coalverify.mts`):
+ *
+ * | form                | tree-sitter | moc      | guard vs `a ?? b` |
+ * | ------------------- | ----------- | -------- | ----------------- |
+ * | `a ?? b`            | parses      | 0 errors | —                 |
+ * | `a\n?? b`           | parses      | 0 errors | **matches**       |
+ * | `a ??\nb`           | parses      | 0 errors | differs           |
+ * | `a ?? \nb`          | parses      | 0 errors | **matches**       |
+ *
+ * The break must therefore go **before** the operator, never after — which is what this module
+ * emits, and what `coalesceOperator` restates from the token's own side.
+ */
+function planCoalesce(node: NormalBranch): Chain | null {
+    if (node.kind !== COALESCE_KIND) return null;
+
+    // The left operands are collected **in the order they are met**, and the final right operand
+    // closes the run. `planChain` prepends instead, because it descends a left-leaning spine and so
+    // meets its operands back to front; here the spine leans right, so the outermost level is met
+    // first and the walk already reads left to right. Prepending in this direction is what produced
+    // a reversed `a ?? b ?? c` — caught by the guard, not by review.
+    const lefts: NormalChild[] = [];
+    const ops: string[] = [];
+    let tail: NormalChild;
+
+    let current: NormalBranch = node;
+    for (;;) {
+        const children = current.children;
+        // The expected level: operand, gap, operator, operand — four children, no gap after the
+        // operator, because the operator's own token text carries the trailing space.
+        if (children.length !== 4) return null;
+        const [left, gap, opNode, right] = children;
+        // The gap must be plain whitespace. A comment here is `planChain`'s case for the same
+        // reason: flattening would drop the text, so this is not a chain the module may touch.
+        if (gap.nodeType !== 'Text') return null;
+        // The operator is a **bare `Token`**, not a `Branch` wrapping one — the one place this walk
+        // parts company with `opText`, which requires `nodeType === 'Branch'` and so reports `null`
+        // here. Measured with `.probe/_coalshape.mts`; a `bin_exp` level by contrast holds
+        // `Branch bin_op → Token "+"`.
+        if (opNode.nodeType !== 'Token') return null;
+        if (opNode.text.trim() !== COALESCE_OP) return null;
+
+        lefts.push(left);
+        ops.push(COALESCE_OP);
+
+        if (
+            right.nodeType === 'Branch' &&
+            (right as NormalBranch).kind === COALESCE_KIND
+        ) {
+            // The spine leans right, so the chain continues into the *right* operand.
+            current = right as NormalBranch;
+            continue;
+        }
+        tail = right;
+        break;
+    }
+
+    return { operands: [...lefts, tail], ops };
+}
+
+/**
  * The Doc for a binary chain, or `null` when the node is not one this module handles.
  *
  * Returning `null` rather than a Doc keeps the decision at the call site in `walk.ts`, where the
@@ -221,6 +322,10 @@ export function binaryChainDoc(
     node: NormalBranch,
     print: (child: NormalChild) => Doc,
 ): Doc | null {
+    // `coalesce_exp` first: it is not a `bin_exp`, so `planChain` would refuse it below.
+    const coalesce = planCoalesce(node);
+    if (coalesce !== null) return coalesceDoc(coalesce, print);
+
     const chain = planChain(node);
     if (chain === null) return null;
 
@@ -249,5 +354,30 @@ export function binaryChainDoc(
     }
     out.push(indent(rest));
 
+    return group(out);
+}
+
+/**
+ * The Doc for a flattened `??` chain.
+ *
+ * The break goes **before** the operator, matching `|>` rather than the binary levels: the operator
+ * cannot trail a line (see `planCoalesce`), and `coalesceOperator` — the module that owns this
+ * whitespace-sensitive token — already emits exactly that shape. Its `' '` after the operator is the
+ * mandatory trailing space the lexer requires, so this consumes the pair rather than re-deriving it.
+ *
+ * The run is wrapped in its **own** `group` even when it is the outermost chain. That `group` is
+ * load-bearing on the flat path: `indent` is a no-op while the enclosing group stays flat, so the
+ * flat rendering is `a ?? b ?? c` exactly as the source spelled it and the guard's token texts are
+ * preserved. If an enclosing group breaks and this one does not, the doc flattens regardless of
+ * width, which is why the `??` chain's own width is decided here rather than by its parent.
+ */
+function coalesceDoc(chain: Chain, print: (child: NormalChild) => Doc): Doc {
+    const { operands, ops } = chain;
+    const out: Doc[] = [print(operands[0])];
+    const rest: Doc[] = [];
+    for (let i = 0; i < ops.length; i += 1) {
+        rest.push(coalesceOperator(ops[i]), print(operands[i + 1]));
+    }
+    out.push(indent(rest));
     return group(out);
 }
