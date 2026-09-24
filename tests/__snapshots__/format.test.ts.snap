@@ -1042,3 +1042,706 @@ let wide = {
 };
 "
 `;
+
+exports[`format/port/add-trailing-delimiters.mo > prints as snapshotted 1`] = `
+"(a, b, c)
+(a, b, c,)
+(a, b, c,)
+(a, b, c,)
+"
+`;
+
+exports[`format/port/anonymous-function-line-break.mo > prints as snapshotted 1`] = `
+"(func() { a })
+"
+`;
+
+exports[`format/port/anonymous-functions-0.mo > prints as snapshotted 1`] = `
+"func ():() {}
+"
+`;
+
+exports[`format/port/anonymous-functions-1.mo > prints as snapshotted 1`] = `
+"func <T> () {}
+"
+`;
+
+exports[`format/port/array-indexing-line-break.mo > prints as snapshotted 1`] = `
+"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0]
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[
+0]
+"
+`;
+
+exports[`format/port/automatic-semicolons-0.mo > prints as snapshotted 1`] = `
+"{}
+A
+"
+`;
+
+exports[`format/port/automatic-semicolons-1.mo > prints as snapshotted 1`] = `
+"if () {}
+else {}
+"
+`;
+
+exports[`format/port/automatic-semicolons-2.mo > prints as snapshotted 1`] = `
+"{}
+.A
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-0.mo > prints as snapshotted 1`] = `
+"/*
+
+{
+// }
+};
+A
+
+*/
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-1.mo > prints as snapshotted 1`] = `
+"{}
+/**/
+A
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-2.mo > prints as snapshotted 1`] = `
+"{
+  /**/
+}
+A
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-3.mo > prints as snapshotted 1`] = `
+"{}
+
+{}
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-4.mo > prints as snapshotted 1`] = `
+"if () {}
+ /*c*/ else {}
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-6.mo > prints as snapshotted 1`] = `
+"try {}
+ /*c*/ finally {}
+"
+`;
+
+exports[`format/port/automatic-semicolons-with-block-comment-8.mo > prints as snapshotted 1`] = `
+"{}
+ /*c*/ .A
+"
+`;
+
+exports[`format/port/block-comments.mo > prints as snapshotted 1`] = `
+"/**/
+
+/***/
+
+/****/
+
+/*****/
+
+/******/
+
+/*******/
+
+/********/
+
+/*********/
+
+/**********/
+
+/***********/
+
+let/*{{*/x = 0; //x
+(x)
+/**/ /**/
+
+/**/
+
+/**/
+/*=*/
+
+/**=*/
+
+/**=**/
+
+/** **/
+
+/*** **/
+
+/** ***/
+
+/****
+-----
+******/
+"
+`;
+
+exports[`format/port/block-with-existing-newline.mo > prints as snapshotted 1`] = `
+"{ a; b }
+"
+`;
+
+exports[`format/port/bracket-spacing.mo > prints as snapshotted 1`] = `
+"{ abc }
+{ abc }
+"
+`;
+
+exports[`format/port/comma-parentheses.mo > prints as snapshotted 1`] = `
+"if(x) { y }
+"
+`;
+
+exports[`format/port/do-optional-0.mo > prints as snapshotted 1`] = `
+"?{}
+"
+`;
+
+exports[`format/port/do-optional-1.mo > prints as snapshotted 1`] = `
+"do ? {}
+"
+`;
+
+exports[`format/port/do-optional-2.mo > prints as snapshotted 1`] = `
+"do?{}
+"
+`;
+
+exports[`format/port/dot-after-group.mo > prints as snapshotted 1`] = `
+"().0
+(
+
+).0
+(a).0
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-0.mo > prints as snapshotted 1`] = `
+"import A "A";
+
+actor {};
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-2.mo > prints as snapshotted 1`] = `
+"import A "A";
+import B "B";
+
+actor {};
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-4.mo > prints as snapshotted 1`] = `
+"import A "A";
+// import B "B";
+
+actor {};
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-6.mo > prints as snapshotted 1`] = `
+"import A "A";
+// import B "B";
+import { C } "C";
+
+actor {};
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-8.mo > prints as snapshotted 1`] = `
+"import A "A";
+
+actor {}
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-9.mo > prints as snapshotted 1`] = `
+"import A "A";
+// import B "B";
+import C "C";
+
+actor {};
+"
+`;
+
+exports[`format/port/double-newline-after-import-section-10.mo > prints as snapshotted 1`] = `
+"import A "A";
+import { B } "B";
+// import C "C";
+
+actor A { abc };
+"
+`;
+
+exports[`format/port/emoji-in-import-statement.mo > prints as snapshotted 1`] = `
+"import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+import  Prim  "mo:⛔";
+"
+`;
+
+exports[`format/port/group-spacing.mo > prints as snapshotted 1`] = `
+"{};
+{ a };
+();
+(a)
+"
+`;
+
+exports[`format/port/if-else-wrapping-0.mo > prints as snapshotted 1`] = `
+"if true () else ()
+"
+`;
+
+exports[`format/port/if-else-wrapping-1.mo > prints as snapshotted 1`] = `
+"if true {} else {}
+"
+`;
+
+exports[`format/port/if-else-wrapping-2.mo > prints as snapshotted 1`] = `
+"if true (a) else (b)
+"
+`;
+
+exports[`format/port/if-else-wrapping-3.mo > prints as snapshotted 1`] = `
+"if true { a } else if false { b } else { c }
+"
+`;
+
+exports[`format/port/line-comment-in-single-line.mo > prints as snapshotted 1`] = `
+"a<
+  (
+    b,
+    //c
+  )>()
+"
+`;
+
+exports[`format/port/lines-before-after-group-0.mo > prints as snapshotted 1`] = `
+"[1, 2,];
+"
+`;
+
+exports[`format/port/lines-before-after-group-1.mo > prints as snapshotted 1`] = `
+"{ abc; };
+"
+`;
+
+exports[`format/port/lines-before-after-group-2.mo > prints as snapshotted 1`] = `
+"[1, 2,]
+"
+`;
+
+exports[`format/port/lines-before-after-group-3.mo > prints as snapshotted 1`] = `
+"{ abc }
+"
+`;
+
+exports[`format/port/lines-before-after-group-5.mo > prints as snapshotted 1`] = `
+"actor { func f() { let a = 0; } }
+"
+`;
+
+exports[`format/port/logical-operators.mo > prints as snapshotted 1`] = `
+"A and
+  B
+(A and B)
+(A and B)
+(A or B)
+(A or B)
+"
+`;
+
+exports[`format/port/multiplication-and-division-spacing.mo > prints as snapshotted 1`] = `
+"1 *
+  1
+x *
+  1
+1 /
+  1
+x /
+  1
+"
+`;
+
+exports[`format/port/nested-group-line-breaks.mo > prints as snapshotted 1`] = `
+"(
+  (
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx
+  )
+);
+"
+`;
+
+exports[`format/port/no-automatic-semicolons-before-else-catch-etc.mo > prints as snapshotted 1`] = `
+"if a {}
+// Comment
+else {};
+
+if a
+{}
+// Comment
+else {};
+
+if a {}
+// Comment
+else {};
+if a {}
+
+// Comment
+else {};
+if a {}
+// Comment
+  else
+{};
+try {}
+// Comment
+catch e {};
+
+try {}
+// Comment
+finally {};
+"
+`;
+
+exports[`format/port/no-delimiter-for-record-extension.mo > prints as snapshotted 1`] = `
+"{ a }
+{ a : b }
+{ a = b }
+{ a and b }
+{ a with b = c }
+"
+`;
+
+exports[`format/port/null-coalesce-operator-0.mo > prints as snapshotted 1`] = `
+"a ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-1.mo > prints as snapshotted 1`] = `
+"a ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-2.mo > prints as snapshotted 1`] = `
+"a ?? b ?? c
+"
+`;
+
+exports[`format/port/null-coalesce-operator-3.mo > prints as snapshotted 1`] = `
+"a ?? b;
+"
+`;
+
+exports[`format/port/null-coalesce-operator-4.mo > prints as snapshotted 1`] = `
+"(a ?? b);
+"
+`;
+
+exports[`format/port/null-coalesce-operator-5.mo > prints as snapshotted 1`] = `
+"?a
+"
+`;
+
+exports[`format/port/null-coalesce-operator-6.mo > prints as snapshotted 1`] = `
+"??a
+"
+`;
+
+exports[`format/port/null-coalesce-operator-7.mo > prints as snapshotted 1`] = `
+"? ?a
+"
+`;
+
+exports[`format/port/null-coalesce-operator-8.mo > prints as snapshotted 1`] = `
+"a ?? ?b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-9.mo > prints as snapshotted 1`] = `
+"?a ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-10.mo > prints as snapshotted 1`] = `
+"?a ?? ?b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-11.mo > prints as snapshotted 1`] = `
+"??a ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-12.mo > prints as snapshotted 1`] = `
+"a ?? ??b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-13.mo > prints as snapshotted 1`] = `
+"(a) ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-14.mo > prints as snapshotted 1`] = `
+"a ?? (b)
+"
+`;
+
+exports[`format/port/null-coalesce-operator-15.mo > prints as snapshotted 1`] = `
+"(a) ?? (b)
+"
+`;
+
+exports[`format/port/null-coalesce-operator-16.mo > prints as snapshotted 1`] = `
+"(a ?? b) ?? c
+"
+`;
+
+exports[`format/port/null-coalesce-operator-17.mo > prints as snapshotted 1`] = `
+"a ?? (b ?? c)
+"
+`;
+
+exports[`format/port/null-coalesce-operator-18.mo > prints as snapshotted 1`] = `
+"(?a) ?? b
+"
+`;
+
+exports[`format/port/null-coalesce-operator-19.mo > prints as snapshotted 1`] = `
+"a ?? (?b)
+"
+`;
+
+exports[`format/port/optional-variants-0.mo > prints as snapshotted 1`] = `
+"?#abc
+"
+`;
+
+exports[`format/port/optional-variants-1.mo > prints as snapshotted 1`] = `
+"? #abc
+"
+`;
+
+exports[`format/port/pipe-operator.mo > prints as snapshotted 1`] = `
+"A
+  |> B
+(A |> B)
+"
+`;
+
+exports[`format/port/prettier-ignore.mo > prints as snapshotted 1`] = `
+"//prettier-ignore
+1*1;
+2 *
+  2
+//prettier-ignore
+1 *
+  1;
+
+2 *
+  2
+// prettier-ignore
+{ abc }
+"
+`;
+
+exports[`format/port/remove-trailing-delimiters.mo > prints as snapshotted 1`] = `
+"(a, b, c,)
+"
+`;
+
+exports[`format/port/trailing-comma-in-square-brackets-0.mo > prints as snapshotted 1`] = `
+"[a, b]
+"
+`;
+
+exports[`format/port/trailing-comma-in-square-brackets-1.mo > prints as snapshotted 1`] = `
+"[a,]
+"
+`;
+
+exports[`format/port/trailing-comma-in-square-brackets-2.mo > prints as snapshotted 1`] = `
+"x : [
+T
+]
+"
+`;
+
+exports[`format/port/trailing-comma-in-square-brackets-7.mo > prints as snapshotted 1`] = `
+"let x = [{ abc; },];
+"
+`;
+
+exports[`format/port/type-bindings-0.mo > prints as snapshotted 1`] = `
+"func foo<A<:Any>(x:A) {}
+"
+`;
+
+exports[`format/port/type-bindings-1.mo > prints as snapshotted 1`] = `
+"func foo <A <: Any>(x:A) {}
+"
+`;
+
+exports[`format/port/unary-binary-operators.mo > prints as snapshotted 1`] = `
+"1 +
+  5
+1. /
+  +5
+"
+`;
+
+exports[`format/port/variants-text-concatenation.mo > prints as snapshotted 1`] = `
+"#a
+"A" # b
+"A" # #b
+"A"# b
+"A"#"B"
+"A"# #b
+"A" #
+"B"
+"
+`;
+
+exports[`format/port/wildcard-identifier-0.mo > prints as snapshotted 1`] = `
+"_(i)
+"
+`;
+
+exports[`format/port/wildcard-identifier-1.mo > prints as snapshotted 1`] = `
+"_[i]
+"
+`;
+
+exports[`format/port/wildcard-identifier-2.mo > prints as snapshotted 1`] = `
+"_ (i)
+"
+`;
+
+exports[`format/port/wildcard-identifier-3.mo > prints as snapshotted 1`] = `
+"_ [i]
+"
+`;
+
+exports[`format/port/with-keyword.mo > prints as snapshotted 1`] = `
+"{ a and b with c = d }
+{ a and b with c = d }
+{ a and b with c = d }
+{ a and b with c = d; e = f; }
+"
+`;
