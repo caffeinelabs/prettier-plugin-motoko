@@ -55,6 +55,7 @@ import {
     betweenSeparator,
     hasBlankLine,
     isComment,
+    isLineComment,
     listIndent,
     listItems,
     listOf,
@@ -204,9 +205,17 @@ function listDoc(
             : [list.open, list.close];
     }
 
+    // The close-glue decision needs to know what the *last item* is, and that is only answerable
+    // here: see `listIndent`'s note on why the caller owns it. A line comment cannot have the close
+    // after it on the same line, so the glue is dropped for that one case.
+    const last = items[items.length - 1];
     return group([
         list.open,
-        listIndent(listItemsDoc(items, list, ctx), list),
+        listIndent(
+            listItemsDoc(items, list, ctx),
+            list,
+            last !== undefined && isLineComment(last.node),
+        ),
         list.close,
     ]);
 }

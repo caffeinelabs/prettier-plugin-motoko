@@ -481,11 +481,51 @@ export function innerBreak(list: ListDescriptor): Doc {
  * opening break is untouched, because it is always safe. See the descriptor field for why this is a
  * correctness requirement and not a style preference, and `.probe/_angles2.mts` for the output that
  * this function used to produce (which no moc accepts).
+ *
+ * ## A trailing line comment is the one thing glue cannot do
+ *
+ * `closeGlued` is right for every last item that is *code*, and wrong for exactly one: a line
+ * comment. `listItemsDoc` already forces a `breakParent` for a comment (walk.ts's `commentDoc`), so
+ * a list whose last item is a `//` is always printed broken — and glue then attaches the close to
+ * the comment's own text, producing `// c>`. The `>` is inside the comment, the close is gone, and
+ * the next re-parse fails.
+ *
+ * The guard catches this, so it is not a correctness hole; it is a **crash**, and on valid Motoko.
+ * `let x = L.make<\n  Nat,\n  Int // c\n>()` is accepted by moc 1.16.0 and rejected by the printer,
+ * which means the printer cannot format a file moc compiles. `.probe/_instcrash.mts` is the
+ * measurement.
+ *
+ * There is no spacing that fixes it, which is why the fix is a break rather than a different join.
+ * Gluing puts the `>` in the comment; a space leaves the `>` after the comment's text and *still*
+ * inside the comment, because a line comment runs to the newline; and moc reads a `>` with
+ * whitespace on both sides as `GTOP` rather than a close — the same lexer rule that makes
+ * `closeGlued` necessary in the first place. So the close goes on its own line, which is the only
+ * spelling that ends the comment before the `>`. That makes a trailing line comment the single
+ * exception to "the close is never broken", and it is a narrow one: a trailing *block* comment still
+ * glues, because a block comment ends at its own delimiter, not at the newline.
+ * `.probe/_trailcomment2.mts` measures both.
+ *
+ * `lastIsLineComment` is passed by the caller rather than derived here, because the caller is the
+ * only place that has the item list — `listIndent` sees the joined Doc, and re-deriving "what came
+ * last" from a Doc would be a different and worse question.
  */
-export function listIndent(joined: Doc, list: ListDescriptor): Doc {
+export function listIndent(
+    joined: Doc,
+    list: ListDescriptor,
+    lastIsLineComment = false,
+): Doc {
     const b = innerBreak(list);
+    if (list.closeGlued && lastIsLineComment)
+        return [indent([b, joined]), hardline];
     if (list.closeGlued) return [indent([b, joined]), glue()];
     return [indent([b, joined]), b];
+}
+
+/** Whether a node is a line comment — the one comment kind that cannot have anything after it on its line. */
+export function isLineComment(node: NormalChild): boolean {
+    if (node.nodeType === 'Text') return false;
+    if (node.nodeType === 'Token') return node.type === 'line_comment';
+    return node.kind === 'line_comment';
 }
 
 /**
