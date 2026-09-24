@@ -493,6 +493,240 @@ let indexedHead = someLongArrayNameHere[0]
 "
 `;
 
+exports[`format/expressions/operator-spacing.mo > prints as snapshotted 1`] = `
+"/**
+ * The \`+\`/\`-\`/\`*\`/\`/\`/\`^\` seams: what \`preserve\` does with the space the source did, and did not, write.
+ *
+ * ## Where this file comes from
+ *
+ * The legacy suite (\`tests/legacy/formatter.test.ts\`) splits these seams across four separate tests —
+ * \`unary operators\`, \`unary / binary operators\`, \`multiplication and division spacing\`,
+ * \`addition vs. positive number\`, \`subtraction vs. negative number\`. Between them they hold 27
+ * replayable cases, and all 27 already print correctly through this printer (\`.probe/_tally.mts\`, and
+ * the per-case output in \`.probe/_adj.mts\`). So this fixture is that whole group moved into one file
+ * at the source's own spelling: every expression below is a legacy input verbatim, and the snapshot
+ * is the assertion that the printer still does what the group always asked for.
+ *
+ * ## The rule it asserts, and why the two halves are both here
+ *
+ * \`docs/adjacency.md\` §3 owns the \`-\` seam and reaches the sharpest result in that document: of the
+ * four spellings of "minus one" after a head, only one parses on all three compilers. The printer's
+ * job is therefore *not* to normalise \`-\` away. It is to give a **binary** operator its spaces and to
+ * leave a **unary** sign glued to its operand — and those two jobs pull in opposite directions on the
+ * same character, which is why a printer that only knew one of them would pass half of this file.
+ *
+ * So the fixture deliberately holds both directions:
+ *
+ *   - \`1+1\` → \`1 + 1\`. The source left the space out; both parses and both meanings agree, so
+ *     supplying it is free and the style guide asks for it.
+ *   - \`x - +1\` → unchanged. Here the \`+\` is unary. A normaliser that treated every \`+\` as binary
+ *     would emit \`x - + 1\`, which is a subtraction of a spaced \`+ 1\` — and on 1.16.1 that spelling
+ *     does not parse at all (adjacency.md's \`br-neg-space\` row).
+ *
+ * The pair is the whole rule. Either half alone is passed by a printer that is wrong about the other.
+ *
+ * ## Why \`verify.ts\` is what makes the second half enforceable
+ *
+ * A wrong bend here is not a layout preference, it is a different program. The runtime guard compares
+ * the printed token stream against the tree the printer was given, so collapsing \`x - +1\` into
+ * \`x - + 1\` is a hard failure at format time rather than a snapshot someone has to notice. That is why
+ * the cases below are worth pinning even though most of them are byte-for-byte identity: they are the
+ * cheap regression test for a guard that is doing real work.
+ */
+
+// --- Binary seams: the source omitted a space and the printer supplies it -------------------------
+//
+// Every line is the same seam: two operands and an operator the source wrote tight. \`1*1\` and \`1 * 1\`
+// are the same tree, so normalising costs nothing and the style guide asks for it.
+
+1 + 5;
+1 + 1;
+1 + 1.0;
+x + 1;
+x + 1.0;
+1 * 1;
+x * 1;
+1 / 1;
+x / 1;
+1 - 1;
+1.0 - 1.0;
+x - 1;
+x - 1.0;
+
+// The same seam written the *other* way round: the space is before the sign, not after it. \`1 +1\` is
+// still one plus one — \`+\` is binary here, not unary — so the printer is free to print \`1 + 1\`, and
+// does. This is the pair that shows the rule is about the operator's *arity*, not its spelling: the
+// source wrote \`+1\` tight and the printer still spaces it, because it read a binary \`+\`.
+1 + 1;
+x + 1;
+1 - 1;
+x - 1;
+
+// \`1./+5\` is the case that a naive rewrite gets wrong twice over. The \`.\` closes the float literal
+// \`1.\` (not a member access), and the \`+\` is unary. The printer emits \`1. / +5\` — the binary space
+// between the operands, and the unary \`+\` still glued to its \`5\`.
+1. / +5;
+
+// --- Unary seams: the gluing is load-bearing, so it is preserved ----------------------------------
+//
+// A run of unary operators. \`-+5\` is minus applied to plus applied to \`5\`; respacing it as \`- + 5\`
+// would be a subtraction of a positive literal, which is a different tree with a different meaning.
+// All of these are identity cases, and \`^ ^ a\` is the one that is not even tight — the printer keeps
+// the source's own gap rather than choosing one.
+
+-+5;
++-a;
++ - ^5;
+^ ^a;
+^ ^ a;
+
+// --- Unary signs after a head: the cases that must not be bent ------------------------------------
+//
+// The \`+\`/\`-\` here sits where a binary operator could also sit, so getting it wrong silently changes
+// the parse rather than failing loudly. \`x+ -1\` is the tight form of "x plus negative one"; \`x - +1\`
+// is its mirror. Both keep the unary sign glued.
+x + -1;
+x - +1;
+
+// An argument, an index position, and a return: three more heads a unary sign can follow. \`x(+1)\` and
+// \`x(-1)\` are calls whose argument is a signed literal; bending either would turn the sign into a
+// binary operator against a missing left operand.
+x(+1);
+x(-1);
+return +1;
+return -1;
+
+// The statement-boundary case. The \`+\` opens a *second* statement, so it is not continuing \`x\` — and
+// reading it as a binary \`+\` across the \`;\` is exactly the mistake this line exists to catch. The
+// printer keeps them on separate lines.
+x;
++1;
+"
+`;
+
+exports[`format/layout/whitespace-and-brackets.mo > prints as snapshotted 1`] = `
+"/**
+ * Whitespace at the edges of a file, blank lines between statements, and the inner spacing of
+ * \`{\`/\`[\`/\`(\`.
+ *
+ * ## Where this file comes from
+ *
+ * Four legacy tests — \`empty\`, \`trailing newline\`, \`extra whitespace\`, \`bracket spacing\` — hold 7
+ * cases, 6 of which already print to their expectation and 1 of which does not. The one that does not
+ * is the \`bracketSpacing\` case discussed below, and it is a change \`docs/style.md\` asks for rather
+ * than a regression to fix.
+ *
+ * ## The rules, from \`docs/style.md\`
+ *
+ * - **§Blank lines.** "At most one consecutive blank line in the output, and the printer never
+ *   invents one. Runs of two or more blanks collapse to one; leading and trailing blanks inside a
+ *   file are dropped." The document gives this exact case as its own testable claim:
+ *   \`format('\\n\\na;\\n\\n\\nb;\\n\\n')\` → \`'a;\\n\\nb;\\n'\`. The first two sections below are that rule, minus
+ *   the leading blanks — see the note on file edges.
+ * - **§Conflict rulings 1.** Inner spacing of record literals follows \`bracketSpacing\`, default
+ *   \`true\`. The legacy suite asserts \`format('{abc}')\` → \`'{ abc }\\n'\`, which is the ruling's own
+ *   stated evidence, and the section on inner spacing below is that ruling.
+ *
+ * ## Why the leading-blank half of the rule is not here
+ *
+ * "Leading blanks are dropped" cannot be pinned by a fixture that *starts* with leading blanks,
+ * because this file starts with this comment. The rule is real and it is measured
+ * (\`.probe/_layoutmore.mts\`: \`'\\n\\na;\\n\\n\\nb;\\n\\n'\` → \`'a;\\n\\nb;\\n'\`), it just needs a fixture with no
+ * header, which belongs to the options/first-print PR. What this file pins is the other half: blanks
+ * at the end of the file, in the last section.
+ *
+ * ## Why \`{  abc  }\` is the printer's business and \`arr[  1  ]\` is not
+ *
+ * Inner spacing comes from one table, \`src/printer/parts.ts:LISTS\`, where each list kind carries a
+ * \`spaced\` flag. A record literal is \`spaced: true\` and an array literal is \`spaced: false\`, so both
+ * normalise: the source's extra spaces were never tokens, and the guard has nothing to compare them
+ * against (\`shapeOf\` projects every \`Text\` gap away, \`src/parser/normalize.ts\`).
+ *
+ * \`arr[  1  ]\` is the exception that shows the rule is a *table* and not a principle. That node is an
+ * \`array_idx_exp\`, and it is **not** in \`LISTS\` — an index is not a list — so it falls through to
+ * \`branchDoc\`, which reproduces its children's gaps verbatim. So the same bracket pair keeps its
+ * spaces in one position and loses them in another, and the fixture pins both spellings side by side.
+ *
+ * ## The deliberate change in this file
+ *
+ * The legacy \`bracket spacing\` test's second case passes \`{ bracketSpacing: false }\` and expects
+ * \`{abc}\`. **That option is not wired up yet** — \`.probe/_opts.mts\` shows \`bracketSpacing: false\`,
+ * \`motokoRemoveLinesAroundCodeBlocks: true\` and \`motokoSyntax: 'moc2'\` all leaving the output
+ * unchanged, because the printer reads only \`printWidth\`/\`tabWidth\` (\`src/printer/walk.ts\`) and the
+ * plan gives "organize imports on the CST, **and options**" its own M2 PR. So the case is not
+ * portable yet, and it is not dropped either: the section below asserts the **default** behaviour,
+ * and the option's own fixture belongs in the PR that implements it. Writing \`{abc}\` here would pin
+ * a snapshot this printer cannot produce and pretend the option works.
+ */
+
+// --- A run of blanks collapses to one -------------------------------------------------------------
+//
+// The comment above is followed by two blank lines, and the printer caps the run at one. This is the
+// §Blank lines rule's exact shape, and the comment is here rather than only in the header so that the
+// gap being tested is an ordinary inter-item gap and not the file-edge special case.
+
+a;
+
+b;
+
+// --- One blank line is preserved as written -------------------------------------------------------
+//
+// The other half of the rule: a single blank line is not *removed* either. This pair is already
+// canonical, and it is here so that a printer which collapsed every blank would fail.
+
+c;
+
+d;
+
+// --- A blank line after a comment -----------------------------------------------------------------
+//
+// The comment is an item in the file's own list, so the gap that decides the blank is the one *after*
+// it. It behaves like any other inter-item gap: two blanks collapse to one, and the comment stays on
+// its own line. Measured in \`.probe/_layoutmore.mts\`.
+
+// two blanks follow this comment
+
+e;
+
+// --- Inner spacing comes from the list table, not from the source ---------------------------------
+//
+// Three spellings of one record literal and two of one array literal. Each group collapses to a
+// single output — records spaced, arrays not — because the spacing is a \`spaced\` flag in
+// \`src/printer/parts.ts:LISTS\` and the source's spaces were never tokens.
+
+let r1 = { abc };
+let r2 = { abc };
+let r3 = { abc };
+
+let a1 = [1];
+let a2 = [1];
+
+// --- The exception: an index expression is not a list ---------------------------------------------
+//
+// The same bracket pair in two grammatical positions, printing differently. \`[  1  ]\` on the right of
+// \`=\` is an \`array_exp\`, a list, so it normalises. \`arr[  1  ]\` is an \`array_idx_exp\`, which is *not*
+// in \`LISTS\`, so its gaps are reproduced verbatim and the spaces survive.
+
+let arr = [1];
+let indexed = arr[  1  ];
+
+// --- The same for \`(\` and for call arguments ------------------------------------------------------
+//
+// \`par_exp\` is a list with \`spaced: false\`, and so is a call's argument list, so both normalise.
+
+let p = (1);
+
+f(1, 2);
+
+// --- Trailing blank lines at the end of the file --------------------------------------------------
+//
+// Blanks at the end of the file are dropped, and the file still ends in exactly one newline. Nothing
+// follows this statement, so the run below is a file-edge run and not an inter-statement one.
+
+f;
+"
+`;
+
 exports[`format/obj-actors/object-expressions.mo > prints as snapshotted 1`] = `
 "// Object, module, actor and class bodies, and the anonymous \`object { ... }\` / \`actor { ... }\`
 // expressions. \`obj_body\` recurses, so each nesting level is deliberate.
