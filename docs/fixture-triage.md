@@ -342,6 +342,99 @@ bug. The prose estimates this section used to carry — "keep ~71, change ~20, d
 tests — are superseded; the verdicts are now derived per case and recorded in each fixture's header
 comment as M2 writes them.
 
+## The per-name disposition
+
+`tools/port-verdicts.mjs` derives the verdict per case and rolls it up per _name_, which is the unit
+a fixture is written for. That rollup is not a summary of the table above — it is what
+`tools/port-fixtures.mts` consumes to decide what to write, so the fixture set is a consequence of
+the measurement rather than a second reading of this prose.
+
+Against the 102 names and 323 cases measured above:
+
+- **63 names need no fixture. 39 do**, carrying **104 cases between them** that each need a
+  distinct file. The remaining 219 cases are `keep` (identical to 0.13, so there is nothing to
+  write), `delete` (throws; homed in `tests/refusals/`), or a `change` that _is_ the semicolon
+  rule and nothing else.
+- Of the 39, only **3 are organize-imports names**. That is the consequence the
+  organize section predicted and could not prove: 20 of that suite's 34 names differ by the
+  semicolon rule _alone_ — the organize pass did not change in the rework, 0.13's separators did —
+  and the rule is applied uniformly by the printer and pinned once by `docs/semicolons.md`'s own
+  cases. Re-encoding those 20 names would be 20 copies of one assertion, so they are **not** in the
+  table below and get no fixture.
+- The 39 names become **98 files** (95 under `tests/format/port/`, 3 under
+  `tests/format/organize-imports/`). 27 names compose into one file each; **12 do not**, and get one
+  file per case. Composition is _measured_, not assumed — a legacy case is often a fragment
+  (`1*1`, `? ?a`, `A\n|> B`) and two fragments can concatenate into a program neither one was.
+  The sharpest instance is the one under test: `null coalesce operator` has both `?a` and `??a`
+  among its cases, and joining them puts a `?` and a `?` in positions the source never had — the
+  exact token pair that family is about. So the generator joins each name's cases, formats the join,
+  and keeps it as one file only if the join formats _and_ is a fixed point.
+
+The names needing a fixture, most-work first (`chg` and `del` are the change and delete counts the
+verdicts assigned; `need` is the subset of `chg` that requires its own file — the arithmetic is in
+the columns beside it):
+
+| name                                                     | suite    | cases | keep | chg | del | need | mechanism(s)                                                               |
+| -------------------------------------------------------- | -------- | ----: | ---: | --: | --: | ---: | -------------------------------------------------------------------------- |
+| `null coalesce operator`                                 | format   |    20 |    2 |  18 |   0 |   18 | `??` spacing                                                               |
+| `subtraction vs. negative number`                        | format   |    13 |    5 |   8 |   0 |    8 | 0.13 collapsed groups the source had spread, breaks placed differently     |
+| `addition vs. positive number`                           | format   |    12 |    5 |   7 |   0 |    7 | breaks placed differently, 0.13 collapsed groups the source had spread     |
+| `lines before/after group`                               | format   |     6 |    0 |   5 |   1 |    5 | 0.13 expanded groups that fit                                              |
+| `no delimiter for record extension`                      | format   |     6 |    0 |   5 |   1 |    5 | 0.13 expanded groups that fit                                              |
+| `trailing comma in square brackets`                      | format   |     9 |    0 |   4 |   5 |    4 | 0.13 expanded groups that fit, breaks placed differently                   |
+| `logical operators`                                      | format   |     5 |    0 |   5 |   0 |    4 | the semicolon rule, 0.13 expanded groups that fit                          |
+| `add trailing delimiters`                                | format   |     4 |    0 |   4 |   0 |    4 | 0.13 expanded groups that fit                                              |
+| `multiplication and division spacing`                    | format   |     4 |    0 |   4 |   0 |    4 | breaks placed differently                                                  |
+| `automatic semicolons with block comment`                | format   |     9 |    1 |   6 |   2 |    3 | the semicolon rule, breaks placed differently                              |
+| `variants / text concatenation`                          | format   |     9 |    3 |   4 |   2 |    3 | breaks placed differently, the semicolon rule                              |
+| `` `with` keyword ``                                     | format   |     4 |    1 |   3 |   0 |    3 | 0.13 expanded groups that fit                                              |
+| `wildcard identifier`                                    | format   |     8 |    6 |   2 |   0 |    2 | breaks placed differently                                                  |
+| ``no automatic semicolons before `else`, `catch`, etc.`` | format   |     7 |    5 |   2 |   0 |    2 | 0.13 collapsed groups the source had spread                                |
+| `automatic semicolons`                                   | format   |     4 |    0 |   3 |   1 |    2 | the semicolon rule, 0.13 collapsed groups the source had spread            |
+| `prettier-ignore`                                        | format   |     4 |    1 |   2 |   1 |    2 | breaks placed differently                                                  |
+| `dot after group`                                        | format   |     3 |    1 |   2 |   0 |    2 | 0.13 collapsed groups the source had spread, 0.13 expanded groups that fit |
+| `anonymous functions`                                    | format   |     2 |    0 |   2 |   0 |    2 | breaks placed differently                                                  |
+| `emoji in import statement`                              | format   |     2 |    0 |   2 |   0 |    2 | breaks placed differently                                                  |
+| `pipe operator`                                          | format   |     2 |    0 |   2 |   0 |    2 | 0.13 expanded groups that fit                                              |
+| `type bindings`                                          | format   |     2 |    0 |   2 |   0 |    2 | breaks placed differently                                                  |
+| `block comments`                                         | format   |    21 |   19 |   1 |   1 |    1 | breaks placed differently                                                  |
+| `double newline after import section`                    | format   |    11 |    9 |   2 |   0 |    1 | the semicolon rule, 0.13 expanded groups that fit                          |
+| `if-else wrapping`                                       | format   |     4 |    3 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `array indexing line break`                              | format   |     3 |    0 |   2 |   1 |    1 | the semicolon rule, 0.13 expanded groups that fit                          |
+| `do ? / optional`                                        | format   |     3 |    2 |   1 |   0 |    1 | breaks placed differently                                                  |
+| `bracket spacing`                                        | format   |     2 |    1 |   1 |   0 |    1 | breaks placed differently                                                  |
+| `optional variants`                                      | format   |     2 |    1 |   1 |   0 |    1 | breaks placed differently                                                  |
+| `unary / binary operators`                               | format   |     2 |    1 |   1 |   0 |    1 | breaks placed differently                                                  |
+| `anonymous function line break`                          | format   |     1 |    0 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `block with existing newline`                            | format   |     1 |    0 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `comma-parentheses`                                      | format   |     1 |    0 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `group spacing`                                          | format   |     1 |    0 |   1 |   0 |    1 | 0.13 collapsed groups the source had spread                                |
+| `import with missing semicolon at end`                   | organize |     1 |    0 |   1 |   0 |    1 | 0.13 collapsed groups the source had spread                                |
+| `line comment in single line`                            | format   |     1 |    0 |   1 |   0 |    1 | comments re-spelled                                                        |
+| `nested group line breaks`                               | format   |     1 |    0 |   1 |   0 |    1 | 0.13 collapsed groups the source had spread                                |
+| `no imports to organize`                                 | organize |     1 |    0 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `preserve spacing between imports and code`              | organize |     1 |    0 |   1 |   0 |    1 | 0.13 expanded groups that fit                                              |
+| `remove trailing delimiters`                             | format   |     1 |    0 |   1 |   0 |    1 | the trailing-delimiter rule                                                |
+
+The mechanism names are the `kind` values `tools/port-verdicts.mjs` classified, and each case's note
+carries the measured first differing line with both spellings, which is what is recorded in the
+fixture's own header. The column is a distribution, not a diagnosis: `0.13 expanded groups that fit`
+on 35 cases says 0.13 was measuring a different group than the source's line breaks suggested, which
+is one behaviour, not 35.
+
+### What the generated fixtures do not assert
+
+Seven of the 98 bodies are **fragments moc rejects on their own** — a bare `case x => y` needs the
+`switch` around it (`wildcard identifier`), a top-level `return` needs a function
+(`addition vs. positive number`, `subtraction vs. negative number`), a `let (fst, snd) =` needs
+its right-hand side, and `import with missing semicolon at end` is the organize case the pass
+declines. That is not a defect in the port: the legacy suite formatted fragments, and requiring moc
+to accept them would demand exactly the rewriting the port exists to avoid. `tools/port-fixtures.mts
+--verify` therefore checks the claim the fixtures actually rest on — that **the header comment is
+inert**, i.e. that moc's diagnostics for the body land on the same positions with and without the
+header — and _reports_ the fragment count rather than failing on it. **Seven** is pinned here so a
+future increase is a signal instead of a silent drift.
+
 ## What is deliberately NOT ported
 
 Both suites that are not ported now sit in `tests/legacy/` (see its `README.md` for why the whole
