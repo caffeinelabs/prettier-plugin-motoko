@@ -1,0 +1,658 @@
+// GENERATED FILE — do not edit by hand. Regenerate with `npm run gen:node-types`.
+// Source: tree-sitter-motoko@0.2.0 (src/node-types.json).
+
+/**
+ * Expression mode, stripped from the per-mode alias suffix. A kind only appears in the modes listed for it below.
+ * `block` is head mode (an unparenthesised control head, where `{` always opens the body); `object` is ordinary expression mode.
+ */
+export type NodeMode = 'block' | 'object';
+
+/** Every node kind the pinned grammar can produce, with the modes it appears in. */
+export const NODE_KINDS = {
+    actor_exp: {
+        aliases: ['actor_exp'],
+        modes: [],
+        fields: [],
+    },
+    alt_pat: {
+        aliases: ['alt_pat'],
+        modes: [],
+        fields: [],
+    },
+    and_pat: {
+        aliases: ['and_pat'],
+        modes: [],
+        fields: [],
+    },
+    and_typ: {
+        aliases: ['and_typ'],
+        modes: [],
+        fields: [],
+    },
+    annot_exp: {
+        aliases: ['annot_exp_block', 'annot_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    annot_pat: {
+        aliases: ['annot_pat'],
+        modes: [],
+        fields: [],
+    },
+    array_exp: {
+        aliases: ['array_exp'],
+        modes: [],
+        fields: [],
+    },
+    array_idx_exp: {
+        aliases: ['array_idx_exp_block', 'array_idx_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    array_typ: {
+        aliases: ['array_typ'],
+        modes: [],
+        fields: [],
+    },
+    assert_exp: {
+        aliases: ['assert_exp'],
+        modes: [],
+        fields: [],
+    },
+    assign_exp: {
+        aliases: ['assign_exp_block', 'assign_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    async_exp: {
+        aliases: ['async_exp'],
+        modes: [],
+        fields: [],
+    },
+    async_typ: {
+        aliases: ['async_typ'],
+        modes: [],
+        fields: [],
+    },
+    asyncstar_exp: {
+        aliases: ['asyncstar_exp'],
+        modes: [],
+        fields: [],
+    },
+    await_exp: {
+        aliases: ['await_exp'],
+        modes: [],
+        fields: [],
+    },
+    awaitquest_exp: {
+        aliases: ['awaitquest_exp'],
+        modes: [],
+        fields: [],
+    },
+    awaitstar_exp: {
+        aliases: ['awaitstar_exp'],
+        modes: [],
+        fields: [],
+    },
+    bang_exp: {
+        aliases: ['bang_exp_block', 'bang_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    bin_exp: {
+        aliases: ['bin_exp_block', 'bin_exp_object'],
+        modes: ['block', 'object'],
+        fields: ['left', 'right'],
+    },
+    bin_op: {
+        aliases: ['bin_op'],
+        modes: [],
+        fields: [],
+    },
+    binassign_exp: {
+        aliases: ['binassign_exp_block', 'binassign_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    binassign_op: {
+        aliases: ['binassign_op'],
+        modes: [],
+        fields: [],
+    },
+    block_comment: {
+        aliases: ['block_comment'],
+        modes: [],
+        fields: [],
+    },
+    block_exp: {
+        aliases: ['block_exp'],
+        modes: [],
+        fields: [],
+    },
+    bool_literal: {
+        aliases: ['bool_literal'],
+        modes: [],
+        fields: [],
+    },
+    break_exp: {
+        aliases: ['break_exp'],
+        modes: [],
+        fields: ['label'],
+    },
+    call_exp: {
+        aliases: ['call_exp_block', 'call_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    case: {
+        aliases: ['case'],
+        modes: [],
+        fields: ['body', 'pattern'],
+    },
+    catch: {
+        aliases: ['catch'],
+        modes: [],
+        fields: ['body', 'pattern'],
+    },
+    char_literal: {
+        aliases: ['char_literal'],
+        modes: [],
+        fields: [],
+    },
+    class_dec: {
+        aliases: ['class_dec'],
+        modes: [],
+        fields: ['shared_pat'],
+    },
+    coalesce_exp: {
+        aliases: ['coalesce_exp_block', 'coalesce_exp_object'],
+        modes: ['block', 'object'],
+        fields: ['default', 'value'],
+    },
+    comment_text: {
+        aliases: ['comment_text'],
+        modes: [],
+        fields: [],
+    },
+    continue_exp: {
+        aliases: ['continue_exp'],
+        modes: [],
+        fields: ['label'],
+    },
+    debug_exp: {
+        aliases: ['debug_exp'],
+        modes: [],
+        fields: [],
+    },
+    debug_show_exp: {
+        aliases: ['debug_show_exp'],
+        modes: [],
+        fields: [],
+    },
+    dec_field: {
+        aliases: ['dec_field'],
+        modes: [],
+        fields: [],
+    },
+    do_exp: {
+        aliases: ['do_exp'],
+        modes: [],
+        fields: [],
+    },
+    do_quest_exp: {
+        aliases: ['do_quest_exp'],
+        modes: [],
+        fields: [],
+    },
+    doc_comment: {
+        aliases: ['doc_comment'],
+        modes: [],
+        fields: [],
+    },
+    dot_exp: {
+        aliases: ['dot_exp_block', 'dot_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    exp_dec: {
+        aliases: ['exp_dec'],
+        modes: [],
+        fields: [],
+    },
+    exp_field: {
+        aliases: ['exp_field'],
+        modes: [],
+        fields: [],
+    },
+    finally: {
+        aliases: ['finally'],
+        modes: [],
+        fields: [],
+    },
+    float_literal: {
+        aliases: ['float_literal'],
+        modes: [],
+        fields: [],
+    },
+    for_exp: {
+        aliases: ['for_exp'],
+        modes: [],
+        fields: ['body', 'iterator', 'pattern'],
+    },
+    from_candid_exp: {
+        aliases: ['from_candid_exp'],
+        modes: [],
+        fields: [],
+    },
+    func_dec: {
+        aliases: ['func_dec'],
+        modes: [],
+        fields: [
+            'body',
+            'name',
+            'params',
+            'return_ty',
+            'shared_pat',
+            'typ_params',
+        ],
+    },
+    func_exp: {
+        aliases: ['func_exp'],
+        modes: [],
+        fields: ['body', 'params', 'return_ty', 'shared_pat', 'typ_params'],
+    },
+    func_tf: {
+        aliases: ['func_tf'],
+        modes: [],
+        fields: [],
+    },
+    func_typ: {
+        aliases: ['func_typ'],
+        modes: [],
+        fields: [],
+    },
+    hash_exp: {
+        aliases: ['hash_exp'],
+        modes: [],
+        fields: [],
+    },
+    hex_literal: {
+        aliases: ['hex_literal'],
+        modes: [],
+        fields: [],
+    },
+    identifier: {
+        aliases: ['identifier'],
+        modes: [],
+        fields: [],
+    },
+    if_exp: {
+        aliases: ['if_exp'],
+        modes: [],
+        fields: ['condition', 'else', 'then'],
+    },
+    ignore_exp: {
+        aliases: ['ignore_exp'],
+        modes: [],
+        fields: [],
+    },
+    import: {
+        aliases: ['import'],
+        modes: [],
+        fields: [],
+    },
+    include_dec: {
+        aliases: ['include_dec'],
+        modes: [],
+        fields: [],
+    },
+    inst: {
+        aliases: ['inst'],
+        modes: [],
+        fields: [],
+    },
+    int_literal: {
+        aliases: ['int_literal'],
+        modes: [],
+        fields: [],
+    },
+    label_exp: {
+        aliases: ['label_exp'],
+        modes: [],
+        fields: ['label'],
+    },
+    let_dec: {
+        aliases: ['let_dec'],
+        modes: [],
+        fields: [],
+    },
+    let_else_dec: {
+        aliases: ['let_else_dec'],
+        modes: [],
+        fields: [],
+    },
+    line_comment: {
+        aliases: ['line_comment'],
+        modes: [],
+        fields: [],
+    },
+    lit_exp: {
+        aliases: ['lit_exp'],
+        modes: [],
+        fields: [],
+    },
+    lit_pat: {
+        aliases: ['lit_pat'],
+        modes: [],
+        fields: [],
+    },
+    loop_exp: {
+        aliases: ['loop_exp'],
+        modes: [],
+        fields: ['body', 'condition'],
+    },
+    mixin_dec: {
+        aliases: ['mixin_dec'],
+        modes: [],
+        fields: [],
+    },
+    not_exp: {
+        aliases: ['not_exp'],
+        modes: [],
+        fields: [],
+    },
+    null_literal: {
+        aliases: ['null_literal'],
+        modes: [],
+        fields: [],
+    },
+    obj_body: {
+        aliases: ['obj_body'],
+        modes: [],
+        fields: [],
+    },
+    obj_dec: {
+        aliases: ['obj_dec'],
+        modes: [],
+        fields: [],
+    },
+    obj_pat: {
+        aliases: ['obj_pat'],
+        modes: [],
+        fields: [],
+    },
+    obj_typ: {
+        aliases: ['obj_typ'],
+        modes: [],
+        fields: [],
+    },
+    object_exp: {
+        aliases: ['object_exp'],
+        modes: [],
+        fields: [],
+    },
+    or_typ: {
+        aliases: ['or_typ'],
+        modes: [],
+        fields: [],
+    },
+    par_exp: {
+        aliases: ['par_exp'],
+        modes: [],
+        fields: [],
+    },
+    parenthetical: {
+        aliases: ['parenthetical'],
+        modes: [],
+        fields: [],
+    },
+    parenthetical_exp: {
+        aliases: ['parenthetical_exp'],
+        modes: [],
+        fields: [],
+    },
+    path_typ: {
+        aliases: ['path_typ'],
+        modes: [],
+        fields: [],
+    },
+    prim_exp: {
+        aliases: ['prim_exp'],
+        modes: [],
+        fields: [],
+    },
+    prim_typ: {
+        aliases: ['prim_typ'],
+        modes: [],
+        fields: [],
+    },
+    proj_exp: {
+        aliases: ['proj_exp_block', 'proj_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    proj_identifier: {
+        aliases: ['proj_identifier'],
+        modes: [],
+        fields: [],
+    },
+    quest_exp: {
+        aliases: ['quest_exp'],
+        modes: [],
+        fields: [],
+    },
+    quest_pat: {
+        aliases: ['quest_pat'],
+        modes: [],
+        fields: [],
+    },
+    quest_typ: {
+        aliases: ['quest_typ'],
+        modes: [],
+        fields: [],
+    },
+    rel_op: {
+        aliases: ['rel_op'],
+        modes: [],
+        fields: [],
+    },
+    return_exp: {
+        aliases: ['return_exp'],
+        modes: [],
+        fields: [],
+    },
+    source_file: {
+        aliases: ['source_file'],
+        modes: [],
+        fields: [],
+    },
+    switch_exp: {
+        aliases: ['switch_exp'],
+        modes: [],
+        fields: ['scrutinee'],
+    },
+    system_exp: {
+        aliases: ['system_exp_block', 'system_exp_object'],
+        modes: ['block', 'object'],
+        fields: [],
+    },
+    tag_identifier: {
+        aliases: ['tag_identifier'],
+        modes: [],
+        fields: [],
+    },
+    tag_pat: {
+        aliases: ['tag_pat'],
+        modes: [],
+        fields: [],
+    },
+    text_literal: {
+        aliases: ['text_literal'],
+        modes: [],
+        fields: [],
+    },
+    throw_exp: {
+        aliases: ['throw_exp'],
+        modes: [],
+        fields: [],
+    },
+    to_candid_exp: {
+        aliases: ['to_candid_exp'],
+        modes: [],
+        fields: [],
+    },
+    try_exp: {
+        aliases: ['try_exp'],
+        modes: [],
+        fields: [],
+    },
+    tup_pat: {
+        aliases: ['tup_pat'],
+        modes: [],
+        fields: [],
+    },
+    tup_typ: {
+        aliases: ['tup_typ'],
+        modes: [],
+        fields: [],
+    },
+    typ_annot: {
+        aliases: ['typ_annot'],
+        modes: [],
+        fields: [],
+    },
+    typ_bind: {
+        aliases: ['typ_bind'],
+        modes: [],
+        fields: ['name', 'supertype'],
+    },
+    typ_dec: {
+        aliases: ['typ_dec'],
+        modes: [],
+        fields: [],
+    },
+    typ_item: {
+        aliases: ['typ_item'],
+        modes: [],
+        fields: [],
+    },
+    typ_params: {
+        aliases: ['typ_params'],
+        modes: [],
+        fields: [],
+    },
+    typ_pat_field: {
+        aliases: ['typ_pat_field'],
+        modes: [],
+        fields: [],
+    },
+    typ_path: {
+        aliases: ['typ_path'],
+        modes: [],
+        fields: [],
+    },
+    typ_tag: {
+        aliases: ['typ_tag'],
+        modes: [],
+        fields: [],
+    },
+    typ_tf: {
+        aliases: ['typ_tf'],
+        modes: [],
+        fields: [],
+    },
+    type_identifier: {
+        aliases: ['type_identifier'],
+        modes: [],
+        fields: [],
+    },
+    unassign_exp: {
+        aliases: ['unassign_exp'],
+        modes: [],
+        fields: [],
+    },
+    unassign_op: {
+        aliases: ['unassign_op'],
+        modes: [],
+        fields: [],
+    },
+    unop: {
+        aliases: ['unop'],
+        modes: [],
+        fields: [],
+    },
+    unop_exp: {
+        aliases: ['unop_exp'],
+        modes: [],
+        fields: [],
+    },
+    unop_pat: {
+        aliases: ['unop_pat'],
+        modes: [],
+        fields: [],
+    },
+    val_pat_field: {
+        aliases: ['val_pat_field'],
+        modes: [],
+        fields: [],
+    },
+    val_tf: {
+        aliases: ['val_tf'],
+        modes: [],
+        fields: [],
+    },
+    var_dec: {
+        aliases: ['var_dec'],
+        modes: [],
+        fields: [],
+    },
+    var_exp: {
+        aliases: ['var_exp'],
+        modes: [],
+        fields: [],
+    },
+    var_pat: {
+        aliases: ['var_pat'],
+        modes: [],
+        fields: [],
+    },
+    variant_typ: {
+        aliases: ['variant_typ'],
+        modes: [],
+        fields: [],
+    },
+    weak_typ: {
+        aliases: ['weak_typ'],
+        modes: [],
+        fields: [],
+    },
+    while_exp: {
+        aliases: ['while_exp'],
+        modes: [],
+        fields: ['body', 'condition'],
+    },
+    wild_exp: {
+        aliases: ['wild_exp'],
+        modes: [],
+        fields: [],
+    },
+    wild_pat: {
+        aliases: ['wild_pat'],
+        modes: [],
+        fields: [],
+    },
+} as const;
+
+export type NodeKind = keyof typeof NODE_KINDS;
+
+export const ALL_NODE_KINDS: readonly NodeKind[] = Object.keys(
+    NODE_KINDS,
+) as NodeKind[];
+
+export const GRAMMAR_VERSION = '0.2.0';
+
+/** Symbol ids of head-mode nodes: the alias makes `node.type` ambiguous, so test `node.grammarId` against this set. */
+export const HEAD_SYMBOL_IDS: ReadonlySet<number> = new Set([
+    191, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 272, 273, 274, 275,
+    276, 277, 278, 279, 280,
+]);

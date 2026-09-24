@@ -1,23 +1,27 @@
 {
     "name": "prettier-plugin-motoko",
-    "version": "0.13.0",
+    "version": "1.0.0-beta.0",
     "description": "A code formatter for the Motoko smart contract language.",
-    "main": "lib/environments/node.js",
-    "browser": "lib/environments/web.js",
-    "types": "lib/index.d.ts",
+    "type": "module",
+    "main": "lib/index.js",
+    "exports": {
+        ".": {
+            "types": "./lib/index.d.ts",
+            "import": "./lib/index.js",
+            "default": "./lib/index.js"
+        },
+        "./package.json": "./package.json"
+    },
     "scripts": {
-        "build:ts": "rimraf ./lib && tsc -p . && cp src/utils/removeZeroWidthCharacters.json ./lib/utils/",
-        "build:wasm": "run-s build:wasm:bundler build:wasm:nodejs",
-        "build:wasm:bundler": "wasm-pack build wasm --target bundler --out-dir pkg/bundler && rm wasm/pkg/bundler/.gitignore",
-        "build:wasm:nodejs": "wasm-pack build wasm --target nodejs --out-dir pkg/nodejs && rm wasm/pkg/nodejs/.gitignore",
-        "build": "run-s build:wasm build:ts",
-        "test": "npm run build:wasm:nodejs && npm run test:quick",
-        "test:quick": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest",
-        "typecheck": "tsc -p . --noEmit && tsc -p tests",
+        "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p . && node tools/copy-wasm.mjs",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.tools.json",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "package": "cd packages/mo-fmt && npm run package",
-        "prepublishOnly": "run-s build test:quick"
+        "gen:node-types": "node --experimental-strip-types tools/gen-node-types.ts",
+        "gen:node-types:check": "node --experimental-strip-types tools/gen-node-types.ts --check",
+        "prepublishOnly": "npm run build"
     },
     "devEngines": {
         "runtime": {
@@ -26,36 +30,30 @@
         }
     },
     "devDependencies": {
-        "@types/jest": "^30.0.0",
         "@types/node": "^22.20.3",
-        "fast-glob": "^3.2.11",
-        "jest": "^30.5.1",
-        "npm-run-all": "^4.1.5",
         "prettier": "^3.5.3",
-        "rimraf": "^6.1.3",
-        "ts-jest": "^29.4.12",
+        "tree-sitter-motoko": "0.2.0",
         "typescript": "^6.0.3",
-        "wasm-pack": "^0.15.0"
-    },
-    "overrides": {
-        "test-exclude": "^8.0.0"
+        "vitest": "^3.2.7"
     },
     "peerDependencies": {
-        "prettier": "^2.7 || ^3.0"
+        "prettier": "^3.0.0"
     },
     "files": [
-        "src/**/*",
-        "lib/**/*",
-        "wasm/pkg/**/*"
+        "lib/**/*"
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/dfinity/prettier-plugin-motoko.git"
+        "url": "git+https://github.com/caffeinelabs/prettier-plugin-motoko.git"
     },
     "author": "DFINITY Foundation (https://github.com/dfinity)",
     "license": "Apache-2.0",
     "bugs": {
-        "url": "https://github.com/dfinity/prettier-plugin-motoko/issues"
+        "url": "https://github.com/caffeinelabs/prettier-plugin-motoko/issues"
     },
-    "homepage": "https://github.com/dfinity/prettier-plugin-motoko#readme"
+    "homepage": "https://github.com/caffeinelabs/prettier-plugin-motoko#readme",
+    "types": "lib/index.d.ts",
+    "dependencies": {
+        "web-tree-sitter": "0.26.13"
+    }
 }
