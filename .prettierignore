@@ -18,8 +18,13 @@ package-lock.json
 
 # The corpus harness's own output, rewritten by every run (mirrors .gitignore). `npm run
 # format:check` gates CI, so a generated file that churns per run must not be able to fail it.
+#
+# `CHURN.md` is generated Markdown full of diff excerpts whose content is quoted Motoko; running the
+# repo's own formatter over it would try to format code fences that are deliberately unformatted,
+# and would rewrite the file that the next run overwrites anyway.
 /tools/corpus/report.json
 /tools/corpus/RESULTS.md
+/tools/corpus/CHURN.md
 
 # Machine-generated zero-width character table (~1.5k lines, reformatting it is pure churn)
 src/utils/removeZeroWidthCharacters.json

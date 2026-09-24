@@ -20,6 +20,11 @@ target/
 #
 # `tools/validate-moc2/RESULTS.md` is the exception and IS committed: it is the M3 release-notes
 # artifact the plan asks for, so it is written by hand from a run rather than rewritten by one.
+#
+# `CHURN.md` is in the same class as the two above and is NOT committed: it is the M2 churn report,
+# regenerated wholesale by every run, so its value is the run that produced it rather than the bytes
+# on disk. What gets reviewed is the diff it names, and that lives in the report itself.
 /tools/corpus/report.json
 /tools/corpus/RESULTS.md
+/tools/corpus/CHURN.md
 /tools/validate-moc2/divergences.json
