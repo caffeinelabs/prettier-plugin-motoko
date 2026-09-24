@@ -3,7 +3,11 @@
 exports[`format/obj-actors/object-expressions.mo > prints as snapshotted 1`] = `
 "// Object, module, actor and class bodies, and the anonymous \`object { ... }\` / \`actor { ... }\`
 // expressions. \`obj_body\` recurses, so each nesting level is deliberate.
-let anon = object { public let x = 1; public func f() : Nat { 1 }; };
+//
+// A plain \`actor { ... }\` declaration is \`obj_dec\` + \`obj_body\`, NOT \`actor_exp\`; \`actor_exp\` is
+// only reachable when the operand is a non-body expression (\`actor (x)\`, \`actor "aaaa-aa"\`).
+// \`system_exp\` is only reachable as a \`system func\` inside a body. Neither is a \`{}\` list.
+let anon = object { public let x = 1; public func f() : Nat { 1 } };
 let anonEmpty = object {};
 let actorExp = actor {
   public func f() : Nat { 1 };
@@ -12,23 +16,27 @@ let actorExp = actor {
 let annotated = actor : actor { f : () -> async Nat } {
   public func f() : async Nat { 1 };
 };
-module Inner { public let g = 1; };
-object Named { public func h() : Nat { 1 }; };
-class Klass(x : Nat) { public let v = x; public func get() : Nat { v }; };
+module Inner { public let g = 1 };
+object Named { public func h() : Nat { 1 } };
+class Klass(x : Nat) { public let v = x; public func get() : Nat { v } };
 shared actor class Boxed<T>(init : T) {
   public var value = init;
   public func set(v : T) : () { value := v };
 };
-let mix = mixin (y : Nat) { public let m = y; };
+let mix = mixin (y : Nat) { public let m = y };
 actor Palindrome {};
 "
 `;
 
 exports[`format/obj-actors/object-patterns-and-fields.mo > prints as snapshotted 1`] = `
-"// \`obj_pat\` and the four field forms, which are the token-level shape of every body above.
-// \`dec_field\` attaches a visibility and stability; \`exp_field\` carries the mutable \`var\` and the
-// rename form; \`val_tf\`/\`func_tf\`/\`typ_tf\` are the object-type fields; \`val_pat_field\` and
-// \`typ_pat_field\` are the pattern fields.
+"// \`obj_pat\` and the four field token shapes that every body above is made of: \`dec_field\`
+// attaches a visibility/stability to a declaration, \`exp_field\` carries the mutable \`var\` and
+// the rename form, \`val_tf\`/\`func_tf\`/\`typ_tf\` are the object-type fields, and \`val_pat_field\`
+// is the object-pattern field. (There is no \`var_tf\` kind: a mutable object-type field is a
+// \`val_tf\` whose first token is \`var\`.)
+//
+// The record-literal and object-type inner spacing is left as the source wrote it — see
+// \`docs/style.md\` conflict ruling 1, \`bracketSpacing\`, which is inert under \`preserve\`.
 object Fields {
   public let a = 1;
   private let hidden = 0;
@@ -38,38 +46,46 @@ object Fields {
 };
 func take({ x; y = renamed } : { x : Nat; y : Nat }) : Nat { x };
 func annotated({ a : Nat } : { a : Nat }) : Nat { a };
+
+// \`with\`-form records nest, and the nested base is itself a list that recurses.
+let outer = { { p = 1 } with q = 2 };
 "
 `;
 
 exports[`format/obj-actors/object-types.mo > prints as snapshotted 1`] = `
-"// Object types (\`obj_typ\`), which the decision table puts in the plain \`semi_sep\` row, and the
-// variant type (\`variant_typ\`, \`semi_sep1\`) it shares a shape with.
+"// Object types (\`obj_typ\`), which the decision table puts in the plain \`semi_sep\` row, and
+// \`variant_typ\`, which shares the braces and the \`;\` but is the \`semi_sep1\` row. Both are the
+// same list contract in code: \`docs/style.md\` says the two rows "print identically", so the
+// family is recorded for fidelity and nothing branches on it.
+//
+// \`wide\` is one line in the source and must break; the rest fit and stay flat.
 type Simple = { x : Nat; y : Text };
 type Method = { f : () -> async Nat };
 type Mutable = { var x : Nat };
 type TypeField = { type U = Nat; x : U };
 type Nested = { inner : { deep : { x : Nat } } };
-type CarInfo = {
+type WithParams = { f<A>(a : A) : A };
+type Result = { #ok : Nat; #error : Text };
+type Status = { #Active; #Inactive; #Banned : Text };
+type Arrow = { x : Nat } -> Nat;
+type Wide = {
   model : Text;
   plate : Text;
   isValid : Bool;
   wasStolen : Bool;
   expires : Nat
 };
-type WithParams = { f<A>(a : A) : A };
-type Result = { #ok : Nat; #error : Text };
-type Status = { #Active; #Inactive; #Banned : Text };
-type Arrow = { x : Nat } -> Nat;
 "
 `;
 
 exports[`format/obj-actors/record-literals.mo > prints as snapshotted 1`] = `
 "// Records: the plain form, the shorthand, the mutable field, the rename.
 //
-// Input is deliberately NOT canonical, so the fixture shows the printer moving it: the first
-// record is broken in the source and must collapse, the wide one is one line in the source and
-// must break.
-let simple = { a = 1; b = 2 };
+// The input is deliberately not canonical, so the fixture shows the printer moving it:
+// \`collapsed\` is broken in the source and fits on one line, \`wide\` is one line in the source
+// and overflows \`printWidth\` so it must break. \`trailing\` pins the rule that a trailing \`;\`
+// is reproduced from the source rather than invented or dropped.
+let collapsed = { a = 1; b = 2; };
 let shorthand = { a; b };
 let renamed = { newX = x; y };
 let mutable = { x = 1; var y = 2 };
@@ -83,22 +99,26 @@ let wide = {
   zeta = 6;
   eta = 7
 };
-let broken = { a = 1; b = 2; };
 let trailing = { a = 1; };
 "
 `;
 
 exports[`format/obj-actors/record-update.mo > prints as snapshotted 1`] = `
-"// The \`... with ...\` record-literal form (\`semi_sep1\` per the decision table).
+"// The \`... with ...\` record-literal form, which \`parts.ts:listOf\` resolves to \`semi_sep1\` by
+// instance (the node carries a \`with\` token). The \`and\`-only form has no \`with\` and stays
+// \`semi_sep\`. Both print identically under \`preserve\`, because the trailing separator is
+// reproduced from the source rather than chosen by the family — the family is fidelity to the
+// decision table, not a behaviour switch.
 //
-// The prelude is \`exp_post (and exp_post)* with\`, then the fields. \`and\`-only has no \`with\` and
-// no fields; the printer must keep that shape too.
+// The prelude words (\`and\`, \`with\`) are ordinary list items: \`parts.ts:isItem\` only excludes
+// separators and delimiters, so they are printed in source order between the base expressions
+// and the fields.
 module M { public let u = 25; };
 let a = { x = 1 };
 let base = { b = 6 };
-let extended = { a and M };
+let andOnly = { a and M };
 let withOnly = { base with x = 2 };
-let withAnd = { a and M with u = 1 };
+let andWith = { a and M with u = 1 };
 let nestedBase = { { c = "C"; d = "D" } with a = 8; b = 6 };
 let wide = {
   veryLongBaseNameHere
