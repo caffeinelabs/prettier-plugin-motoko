@@ -1,0 +1,23 @@
+// Ported from the 0.13.0 suite: `automatic semicolons with block comment` (formatter).
+//
+// Verdict: 1 already identical to 0.13, 6 changed on purpose, 2 deleted as a bug.
+//
+// 3 × the semicolon rule:
+//   - [1] line 1: 0.13 "{};" → now "{}"
+//   - [2] line 3: 0.13 "};" → now "}"
+//   - [3] line 1: 0.13 "{};" → now "{}"
+//
+// 3 × breaks placed differently:
+//   - [4] line 2: 0.13 "/*c*/ else {};" → now "/*c*/ else {}"
+//   - [6] line 2: 0.13 "/*c*/ finally {};" → now "/*c*/ finally {}"
+//   - [8] line 2: 0.13 "/*c*/ .A;" → now "/*c*/ .A"
+//
+// 2 case(s) of this name are refusals — the parse throws, so they cannot be
+// a fixture here. They are pinned in `tests/refusals/` (see `tests/refusals.test.ts`).
+//
+// The body below is the legacy input byte-for-byte; the snapshot records what the
+// printer does to it, and `tests/format.test.ts` also asserts it is a fixed point.
+{
+}
+/**/
+A

@@ -1,0 +1,11 @@
+// Ported from the 0.13.0 suite: `bracket spacing` (formatter).
+//
+// Verdict: 1 already identical to 0.13, 1 changed on purpose.
+//
+// 1 × breaks placed differently:
+//   - [1] line 1: 0.13 "{abc}" → now "{ abc }"
+//
+// The body below is the legacy input byte-for-byte; the snapshot records what the
+// printer does to it, and `tests/format.test.ts` also asserts it is a fixed point.
+{abc}
+{ abc }

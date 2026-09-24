@@ -1,0 +1,16 @@
+// Ported from the 0.13.0 suite: `multiplication and division spacing` (formatter).
+//
+// Verdict: 4 changed on purpose.
+//
+// 4 × breaks placed differently:
+//   - [0] line 1: 0.13 "1 * 1" → now "1*1"
+//   - [1] line 1: 0.13 "x * 1" → now "x*1"
+//   - [2] line 1: 0.13 "1 / 1" → now "1/1"
+//   - [3] line 1: 0.13 "x / 1" → now "x/1"
+//
+// The body below is the legacy input byte-for-byte; the snapshot records what the
+// printer does to it, and `tests/format.test.ts` also asserts it is a fixed point.
+1*1
+x*1
+1/1
+x/1
