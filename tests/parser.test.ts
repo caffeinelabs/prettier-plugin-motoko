@@ -203,7 +203,7 @@ describe('parse: rejected input', () => {
     });
 });
 
-/** `shapeOf` collapses branches to `[kind, mode?, children]`; walk it looking for a kind. */
+/** `shapeOf` collapses branches to `[kind, mode?, children]`. */
 function hasKind(node: unknown, kind: string): boolean {
     if (!Array.isArray(node)) return false;
     if (node[0] === kind) return true;
@@ -211,7 +211,7 @@ function hasKind(node: unknown, kind: string): boolean {
     return Array.isArray(kids) && kids.some((c) => hasKind(c, kind));
 }
 
-/** The `mode` of the first node of `kind`, or `undefined` if there is none. */
+/** The mode of the first node of `kind` that has one, or `undefined`. */
 function modeOf(node: unknown, kind: string): string | undefined {
     if (!Array.isArray(node)) return undefined;
     if (node[0] === kind)

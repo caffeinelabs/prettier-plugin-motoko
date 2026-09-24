@@ -2,12 +2,12 @@
 // Source: tree-sitter-motoko@0.2.0 (src/node-types.json).
 
 /**
- * Expression mode, stripped from the per-mode alias suffix. A kind only appears in the modes listed for it below.
- * `block` is head mode (an unparenthesised control head, where `{` always opens the body); `object` is ordinary expression mode.
+ * Expression mode. `block` is head mode (an unparenthesised control head, where `{` always opens the body); `object` is ordinary expression mode.
+ * `modes` below lists alias suffixes only: a head node aliased to a bare name has none, and is found by `HEAD_SYMBOL_IDS`.
  */
 export type NodeMode = 'block' | 'object';
 
-/** Every node kind the pinned grammar can produce, with the modes it appears in. */
+/** Every named node kind the pinned grammar can produce, with its aliases, suffix modes and fields. */
 export const NODE_KINDS = {
     actor_exp: {
         aliases: ['actor_exp'],

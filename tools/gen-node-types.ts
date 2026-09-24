@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Regenerates src/parser/nodes.generated.ts from the pinned grammar's node-types.json.
+ * Regenerates src/parser/nodes.generated.ts from the pinned grammar's node-types.json and parser.c.
  *
  * Usage: node tools/gen-node-types.ts [--grammar <path-to-node-types.json>] [--check]
  *
@@ -24,7 +24,6 @@ const outFile = join(repoRoot, 'src', 'parser', 'nodes.generated.ts');
 
 function defaultNodeTypesPath(): { path: string; grammarVersion: string } {
     const require = createRequire(join(repoRoot, 'package.json'));
-    // The package ships node-types.json but doesn't export it, so locate it via package.json.
     const pkgJson = require.resolve('tree-sitter-motoko/package.json');
     const pkgRoot = dirname(pkgJson);
     return {
@@ -95,7 +94,6 @@ function headSymbolIds(grammarRoot: string): number[] {
         if (id === undefined) continue;
         out.push(id);
     }
-    // Fail rather than emit a quietly different set: a changed count means the grammar or the extraction changed.
     if (out.length !== EXPECTED_HEAD_SYMBOL_COUNT) {
         throw new Error(
             `headSymbolIds: expected ${EXPECTED_HEAD_SYMBOL_COUNT} head symbols for the pinned ` +
@@ -126,7 +124,6 @@ function parseArgs(argv: string[]): {
  */
 const MODE_SUFFIXES = ['_block', '_object'];
 
-/** One node-types.json entry, typed so a grammar that renames a key fails `tsc` instead of generating empty fields. */
 interface NodeTypeEntry {
     type: string;
     named: boolean;
@@ -157,7 +154,6 @@ function tsString(s: string): string {
     return `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 
-/** Quote a key only where Prettier would, so `gen:node-types:check` and `format:check` agree. */
 function tsKey(s: string): string {
     return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s) ? s : tsString(s);
 }
@@ -208,16 +204,16 @@ function generate(
     lines.push('');
     lines.push('/**');
     lines.push(
-        ' * Expression mode, stripped from the per-mode alias suffix. A kind only appears in the modes listed for it below.',
+        ' * Expression mode. `block` is head mode (an unparenthesised control head, where `{` always opens the body); `object` is ordinary expression mode.',
     );
     lines.push(
-        ' * `block` is head mode (an unparenthesised control head, where `{` always opens the body); `object` is ordinary expression mode.',
+        ' * `modes` below lists alias suffixes only: a head node aliased to a bare name has none, and is found by `HEAD_SYMBOL_IDS`.',
     );
     lines.push(' */');
     lines.push("export type NodeMode = 'block' | 'object';");
     lines.push('');
     lines.push(
-        '/** Every node kind the pinned grammar can produce, with the modes it appears in. */',
+        '/** Every named node kind the pinned grammar can produce, with its aliases, suffix modes and fields. */',
     );
     lines.push('export const NODE_KINDS = {');
     for (const base of baseKinds) {
@@ -264,7 +260,7 @@ async function main() {
         grammarVersion = resolved.grammarVersion;
         grammarRoot = defaultGrammarRoot();
     } else {
-        // src/parser.c lives in the grammar root, the parent of the directory holding node-types.json.
+        // `--grammar` points into the grammar's `src/`, next to `parser.c`.
         grammarRoot = dirname(dirname(path));
         try {
             grammarVersion = JSON.parse(
@@ -279,7 +275,7 @@ async function main() {
     if (!Array.isArray(nodeTypes)) {
         throw new Error(`${path} did not parse as a node-types array`);
     }
-    // Format with the repo's Prettier config so `gen:node-types:check` and `format:check` agree on wrapping.
+    // Format with the repo's Prettier config so `gen:node-types:check` and `format:check` agree.
     const generated = await prettier.format(
         generate(nodeTypes, grammarVersion, headSymbolIds(grammarRoot)),
         {
@@ -319,7 +315,7 @@ async function main() {
     );
 }
 
-// Exit non-zero on rejection rather than rely on Node's unhandled-rejection behaviour.
+// Print just the message, not Node's unhandled-rejection stack trace.
 main().catch((error) => {
     console.error(
         `gen-node-types: ${error instanceof Error ? error.message : error}`,

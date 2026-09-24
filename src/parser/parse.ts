@@ -4,13 +4,13 @@ import { createParser } from './tree-sitter.ts';
 import { normalize } from './normalize.ts';
 import type { NormalBranch, NormalChild } from './normalize.ts';
 
-/** Prettier's parse-error location: 1-based line, 0-based column. */
+/** 1-based line, 0-based column. */
 export interface SyntaxErrorLocation {
     start: { line: number; column: number };
     end?: { line: number; column: number };
 }
 
-/** Prettier and its CLI print `loc` and `codeFrame` when present. */
+/** Prettier renders its own code frame from `loc`, replacing `codeFrame`. */
 export class MotokoSyntaxError extends SyntaxError {
     readonly loc: SyntaxErrorLocation;
     readonly codeFrame: string;

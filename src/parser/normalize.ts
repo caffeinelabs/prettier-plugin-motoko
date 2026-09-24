@@ -42,7 +42,7 @@ export interface NormalBranch extends NormalSpan {
     nodeType: 'Branch';
     /** The name as the tree reports it, e.g. `call_exp_object`. */
     type: string;
-    /** `type` without its mode suffix, e.g. `call_exp`. A printer switch over it is exhaustive. */
+    /** `type` without its mode suffix, e.g. `call_exp`. */
     kind: NodeKind;
     mode: NodeMode | null;
     /** The rule that produced the node before aliasing; the only reliable marker of head mode (see `modeOf`). */
@@ -67,7 +67,7 @@ export type NormalNode = NormalToken | NormalBranch;
 
 export type NormalChild = NormalNode | NormalText;
 
-/** Whitespace between two children. Comments are tree children, so a gap never holds one. */
+/** Whitespace no child covers. Comments are tree children, so a gap never holds one. */
 export interface NormalText extends NormalSpan {
     nodeType: 'Text';
     text: string;
@@ -96,7 +96,7 @@ function stripModeSuffix(type: string): {
             }
         }
     }
-    // An unknown kind from a grammar bump passes through; the printer's exhaustive switch is what fails.
+    // Unchecked: a kind missing from `NODE_KINDS` means `gen:node-types` is stale.
     return { kind: type as NodeKind, mode: null };
 }
 
@@ -104,7 +104,7 @@ function stripModeSuffix(type: string): {
  * Head mode can't be read off the visible name.
  * The grammar registers head rules as `<name>_head` and aliases them onto either the bare name (`par_exp`) or the `_block` name (`call_exp_block`),
  * so membership of `grammarId` in `HEAD_SYMBOL_IDS` is the only sound test.
- * It matters because it decides whether a following `{` opens a body or a record. Head mode is reported as `block`, which is what it is for printing.
+ * Head mode is reported as `block`; it decides whether a following `{` opens a body or a record.
  */
 function modeOf(node: TsNode): { kind: NodeKind; mode: NodeMode | null } {
     const stripped = stripModeSuffix(node.type);
@@ -151,7 +151,7 @@ function endPointOf(text: string): NormalPoint {
 /**
  * Normalise a tree-sitter tree into plain objects.
  *
- * The root is widened to the whole input: `source_file` starts at the first token and ends at the last,
+ * The root is widened to the whole input: `source_file` starts at its first token,
  * but `root.text` must equal `source` for the round-trip, and Prettier must be able to address every character.
  */
 export function normalize(root: TsNode, source: string): NormalBranch {
@@ -264,8 +264,8 @@ export function normalize(root: TsNode, source: string): NormalBranch {
 }
 
 /**
- * Check that the leaves and gaps, in order, reproduce `source` exactly.
- * This is the proof that the normaliser lost nothing. Returns the first mismatch, or `null`.
+ * Check that the leaves and gaps, in order, tile `source` exactly. Their texts are slices of it, so this proves the normaliser lost nothing.
+ * Returns the first mismatch, or `null`.
  */
 export function checkRoundTrip(
     node: NormalNode,
@@ -304,10 +304,7 @@ export function checkRoundTrip(
     return null;
 }
 
-/**
- * A position-free shape for structural comparison: node kinds, modes and token texts.
- * It reports every difference; callers decide which ones a rewrite may introduce.
- */
+/** A position-free shape for structural comparison: node kinds, modes and token texts, without whitespace gaps. */
 export function shapeOf(node: NormalChild): unknown {
     if (node.nodeType === 'Text') return null;
     if (node.nodeType === 'Token') {

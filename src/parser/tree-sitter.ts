@@ -2,7 +2,7 @@
  * Lazy, memoised initialisation of web-tree-sitter and the Motoko grammar.
  *
  * The build copies both wasm files next to the compiled module (`lib/parser/`), so an installed plugin never resolves the grammar package,
- * whose install script builds native bindings. From source (tests, tools) they are resolved from the pinned devDependencies instead.
+ * whose install script builds native bindings. From source (tests, tools) they are resolved from the installed packages instead.
  */
 
 import { readFile } from 'node:fs/promises';

@@ -6,14 +6,14 @@ import type { NormalBranch, NormalChild } from './parser/normalize.ts';
 export const AST_FORMAT = 'motoko-ast';
 
 export const PARSER_MOTOKO = 'motoko';
-/** The 0.x parser name, kept for one major because mops passes it explicitly. */
+/** An alias of `motoko`: mops passes this name explicitly. */
 export const PARSER_MOTOKO_TT_PARSE = 'motoko-tt-parse';
 
 const languages: SupportLanguage[] = [
     {
         name: 'Motoko',
         extensions: ['.mo'],
-        // Lets Prettier format fenced `motoko`/`mo` blocks in Markdown.
+        // Markdown fences may be tagged `mo` as well as `motoko`.
         aliases: ['mo'],
         parsers: [PARSER_MOTOKO, PARSER_MOTOKO_TT_PARSE],
         tmScope: 'source.mo',
