@@ -105,15 +105,46 @@ and the boundary is load-bearing, so it is stated precisely:
   `git describe`s as `2.0.0-beta.1-12-g1d57a4fc7b`) — a 1.16.1-era lexer. Treat
   "1.x-OK" for `??` rows as _1.7.0-and-later-OK_, and note that ≤1.6.0 would be SYNTAX.
   See [§6](#6-unverified-and-surprising).
+- **Update (measured after this document's first commit).** A released
+  `motoko-Darwin-arm64-1.16.1.tar.gz` was unpacked to `/tmp/moctar/moc`
+  (`Motoko compiler 1.16.1 (source cmnnq83c-…)`, **no `-N-g` suffix**). It is a true
+  released 1.16.1 and it **settles the question above**: driving the §2 matrix with
+  `NEW=/tmp/moctar/moc`, released 1.16.1 has **17 → 4** "LEXER DIFFERENCE" rows
+  against 1.1.0, and all **four** surviving differences are the `??` rows
+  (`coalesce-spaced`, `coalesce-no-trail`, `coalesce-no-lead`, `coalesce-glued-both`).
+  Every H-family, B-family, `<` and `#` row is **identical** between 1.1.0 and
+  released 1.16.1. So on a real 1.x release:
+
+    - the `??` rows are 1.7.0+-OK exactly as this document says, and
+    - **the H1–H4 parenthesisation rule is a 2.0-era rule, not a 1.x one** — released
+      1.16.1 behaves like 1.1.0 (`if f(x) { 1 } else { 2 }` is SYNTAX on both, TYPE on
+      the pin and 2.0), which is the conclusion §2.1 and §6 drew from static `lexer.ml`
+      reasoning and can now be stated as measured.
+
+    One caution: 1.16.1's lexer.ml is byte-identical to 1.1.0's, yet 1.16.1 **accepts**
+    `f<Nat> (1)` and `??` while 1.1.0 rejects them — so lexer.ml byte-identity is not
+    sufficient evidence for parser-level acceptance. Measure; do not infer.
 
 ### 1.4 Instruments
 
 | instrument                    | path                                           | version string                                     |
 | ----------------------------- | ---------------------------------------------- | -------------------------------------------------- |
 | moc 1.x (oldest runnable)     | `~/.cache/dfinity/versions/0.31.0/moc`         | `Motoko compiler 1.1.0 (source q8nbql1z-…)`        |
+| moc 1.16.1 (released tarball) | `/tmp/moctar/moc`                              | `Motoko compiler 1.16.1 (source cmnnq83c-…)`       |
 | moc 1.16.1-era (PR #6385 pin) | `/tmp/moc6385/src/_build/default/exes/moc.exe` | `Motoko compiler (source 1.16.1-26-g1d57a4fc7b)`   |
 | moc 2.0                       | `/tmp/mocnow/moc`                              | `Motoko compiler 2.0.0-beta.1 (source cm629575-…)` |
 | tree-sitter                   | `.probe/tree-sitter-motoko.wasm`               | tree-sitter-motoko 0.2.0 (sha above)               |
+
+> **Three builds self-report `1.16.1`.** The released tarball prints `1.16.1` with
+> **no** `-N-g` suffix; the PR-#6385 pin prints `1.16.1-26-g1d57a4fc7b`; and
+> `/tmp/moc-head-clean` prints `1.16.1-12-g4eed69ce6c-dirty`, which is a **third**,
+> earlier-dated build that is _not_ the pin and is _not_ a release. They disagree on
+> what parses, so the `-N-g<hash>` suffix is the only reliable identifier — always run
+> `--version` and read the whole string. The `1x` column of §2 is **1.1.0** (that is
+> what `.probe/moc-matrix.sh` sets `OLD` to); the pin is used only where a 1.7.0+-era
+> lexer is required. Reading `1x` as the pin, or substituting head-clean for the pin,
+> produces wrong conclusions — that mistake was made once while checking B3 and the
+> doc was wrongly "corrected" before re-measurement showed §2 reproduced exactly.
 
 > **Discrepancy, disclosed.** The task text asserts "There is NO moc binary and no
 > moc.js in this environment." **This is false for this environment.** Three real moc
@@ -644,10 +675,18 @@ after swapping. It is called out here so no reader mis-reads the raw row. The
 
 **Unverified:**
 
-- No released moc **1.7.0–1.16.1 tarball** was available; the 1.x column above 1.1.0 is
-  the PR-#6385-pinned build, which self-describes as a 2.0 beta. The `lexer.ml`
-  byte-identity argument (§1.3) is the evidence that 1.x spacing rules above 1.1.0
-  equal 1.1.0's; it is strong but is _static reading_, not a compiler run.
+- No released moc **1.7.0–1.16.1 tarball** was available when this document was
+  written; the 1.x column above 1.1.0 is the PR-#6385-pinned build, which
+  self-describes as a 2.0 beta. The `lexer.ml` byte-identity argument (§1.3) was the
+  evidence that 1.x spacing rules above 1.1.0 equal 1.1.0's; it is strong but was
+  _static reading_, not a compiler run.
+- **Resolved since.** A released 1.16.1 tarball was later unpacked to `/tmp/moctar/moc`
+  and run against the §2 matrix. It **behaves like 1.1.0 on every non-`??` row** (4
+  remaining "LEXER DIFFERENCE" rows against 1.1.0, all four the `??` spellings), so the
+  static argument's conclusion is now confirmed by a compiler run for the H, B, `<` and
+  `#` families. See [§1.3](#13-what-1x-actually-means). Caveat: `lexer.ml` byte-identity
+  proved insufficient on its own — 1.16.1's is byte-identical to 1.1.0's while 1.16.1
+  accepts `f<Nat> (1)`; the difference lives in the parser, not the lexer.
 - The `moc-matrix*.sh` `-dp` tree dumps were captured for a sample of rows
   (number-dot, instantiation, the two deviations, `await?`), not for every row.
 - `docs/formatter-rework.md` also lists `src/printer/adjacency.ts` as the consumer;
