@@ -48,6 +48,7 @@ import type {
     NormalNode,
 } from '../parser/normalize.ts';
 import { verifyOutput } from '../verify.ts';
+import { memberChainDoc } from './chain.ts';
 import { controlDoc } from './control.ts';
 import { binaryChainDoc } from './exp.ts';
 import {
@@ -151,6 +152,13 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
         nodeDoc(child, ctx),
     );
     if (chain !== null) return chain;
+    // A member chain is checked *after* a binary chain, and the order matters: a chain of `+`s must
+    // not be examined as a chain of `.`s, and `chain.ts`'s spine walk would refuse it anyway, but
+    // checking the more specific kind first is what keeps both refusals cheap.
+    const member = memberChainDoc(node as NormalBranch, (child) =>
+        nodeDoc(child, ctx),
+    );
+    if (member !== null) return member;
     const control = controlDoc(node as NormalBranch, (child) =>
         nodeDoc(child, ctx),
     );
