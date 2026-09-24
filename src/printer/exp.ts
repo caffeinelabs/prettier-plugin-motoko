@@ -1,14 +1,10 @@
 import { doc } from 'prettier';
 import type { Doc } from 'prettier';
 
-import {
-    breakAfterOperator,
-    coalesceOperator,
-    isIndivisible,
-} from './adjacency.ts';
+import { isIndivisible } from './adjacency.ts';
 import type { NormalBranch, NormalChild } from '../parser/normalize.ts';
 
-const { group, indent, line } = doc.builders;
+const { hardline, indent } = doc.builders;
 
 const OP_KINDS = new Set(['bin_op', 'rel_op']);
 
@@ -35,13 +31,54 @@ function mayTrail(op: string): boolean {
     return !isIndivisible(op);
 }
 
+type Break = 'before' | 'after' | null;
+
 interface Chain {
     operands: NormalChild[];
     ops: string[];
+    /** Where the source broke the line around each operator. */
+    breaks: Break[];
+    /** Source column each broken line started at. */
+    columns: number[];
+}
+
+function column(node: NormalChild): number {
+    return node.nodeType === 'Text' ? -1 : node.startPosition.column;
+}
+
+function lineStart(
+    brk: Break,
+    opNode: NormalChild,
+    right: NormalChild,
+): number {
+    if (brk === 'before') return column(opNode);
+    if (brk === 'after') return column(right);
+    return -1;
+}
+
+function sourceBreak(level: NormalBranch, opNode: NormalChild): Break {
+    const i = level.children.indexOf(opNode);
+    const before = level.children[i - 1];
+    const after = level.children[i + 1];
+    if (before?.nodeType === 'Text' && before.text.includes('\n'))
+        return 'before';
+    if (after?.nodeType === 'Text' && after.text.includes('\n')) return 'after';
+    return null;
 }
 
 // moc lexes `<`/`>` as comparisons only when spaced on both sides, else as type-argument brackets.
 const ANGLE_OPS: ReadonlySet<string> = new Set(['<', '>']);
+
+// In a control head moc reads `a -1` (spaced before, glued after) as a prefix starting the branch; the grammar reads a subtraction.
+const PREFIX_SHAPED_OPS: ReadonlySet<string> = new Set(['-', '+', '^']);
+
+function prefixShaped(level: NormalBranch, opNode: NormalChild): boolean {
+    const i = level.children.indexOf(opNode);
+    return (
+        level.children[i - 1]?.nodeType === 'Text' &&
+        level.children[i + 1]?.nodeType !== 'Text'
+    );
+}
 
 function spacedBothSides(level: NormalBranch, opNode: NormalChild): boolean {
     const i = level.children.indexOf(opNode);
@@ -69,6 +106,8 @@ function planChain(node: NormalBranch): Chain | null {
 
     const operands: NormalChild[] = [];
     const ops: string[] = [];
+    const breaks: Break[] = [];
+    const columns: number[] = [];
 
     let current: NormalBranch = node;
     for (;;) {
@@ -80,6 +119,9 @@ function planChain(node: NormalBranch): Chain | null {
         if (op === null) return null;
         if (!breaksBefore(op) && !mayTrail(op)) return null;
         if (ANGLE_OPS.has(op) && !spacedBothSides(current, opNode)) return null;
+        if (PREFIX_SHAPED_OPS.has(op) && prefixShaped(current, opNode)) {
+            return null;
+        }
 
         if (
             right.nodeType === 'Branch' &&
@@ -90,6 +132,8 @@ function planChain(node: NormalBranch): Chain | null {
 
         ops.unshift(op);
         operands.unshift(right);
+        breaks.unshift(sourceBreak(current, opNode));
+        columns.unshift(lineStart(breaks[0], opNode, right));
 
         if (
             left.nodeType === 'Branch' &&
@@ -102,7 +146,7 @@ function planChain(node: NormalBranch): Chain | null {
         break;
     }
 
-    return { operands, ops };
+    return { operands, ops, breaks, columns };
 }
 
 function planCoalesce(node: NormalBranch): Chain | null {
@@ -110,6 +154,8 @@ function planCoalesce(node: NormalBranch): Chain | null {
 
     const lefts: NormalChild[] = [];
     const ops: string[] = [];
+    const breaks: Break[] = [];
+    const columns: number[] = [];
     let tail: NormalChild;
 
     let current: NormalBranch = node;
@@ -123,6 +169,8 @@ function planCoalesce(node: NormalBranch): Chain | null {
 
         lefts.push(left);
         ops.push(COALESCE_OP);
+        breaks.push(sourceBreak(current, opNode));
+        columns.push(lineStart(breaks[breaks.length - 1], opNode, right));
 
         if (
             right.nodeType === 'Branch' &&
@@ -135,44 +183,27 @@ function planCoalesce(node: NormalBranch): Chain | null {
         break;
     }
 
-    return { operands: [...lefts, tail], ops };
+    return { operands: [...lefts, tail], ops, breaks, columns };
 }
 
+/** A binary or `??` chain that breaks only where the source did, or `null` to leave it to the source-gap fallback. */
 export function binaryChainDoc(
     node: NormalBranch,
     print: (child: NormalChild) => Doc,
 ): Doc | null {
-    const coalesce = planCoalesce(node);
-    if (coalesce !== null) return coalesceDoc(coalesce, print);
-
-    const chain = planChain(node);
+    const chain = planCoalesce(node) ?? planChain(node);
     if (chain === null) return null;
 
-    const { operands, ops } = chain;
-    const out: Doc[] = [print(operands[0])];
-
+    const { operands, ops, breaks, columns } = chain;
+    const first = column(operands[0]);
+    const aligned = breaks.every((b, i) => b === null || columns[i] === first);
     const rest: Doc[] = [];
     for (let i = 0; i < ops.length; i += 1) {
-        const op = ops[i];
         const operand = print(operands[i + 1]);
-        if (breaksBefore(op)) {
-            rest.push(line, op, ' ', operand);
-        } else {
-            rest.push(' ', breakAfterOperator(op), operand);
-        }
+        if (breaks[i] === 'before') rest.push(hardline, ops[i], ' ', operand);
+        else if (breaks[i] === 'after')
+            rest.push(' ', ops[i], hardline, operand);
+        else rest.push(' ', ops[i], ' ', operand);
     }
-    out.push(indent(rest));
-
-    return group(out);
-}
-
-function coalesceDoc(chain: Chain, print: (child: NormalChild) => Doc): Doc {
-    const { operands, ops } = chain;
-    const out: Doc[] = [print(operands[0])];
-    const rest: Doc[] = [];
-    for (let i = 0; i < ops.length; i += 1) {
-        rest.push(coalesceOperator(ops[i]), print(operands[i + 1]));
-    }
-    out.push(indent(rest));
-    return group(out);
+    return [print(operands[0]), aligned ? rest : indent(rest)];
 }

@@ -8,7 +8,6 @@ import type {
     NormalNode,
 } from '../parser/normalize.ts';
 import { verifyOutput } from '../verify.ts';
-import { memberChainDoc } from './chain.ts';
 import { controlDoc } from './control.ts';
 import { binaryChainDoc } from './exp.ts';
 import {
@@ -26,7 +25,7 @@ import {
 } from './parts.ts';
 import type { ListDescriptor, ListItem } from './parts.ts';
 
-const { breakParent, group, hardline } = doc.builders;
+const { align, breakParent, group, hardline } = doc.builders;
 const { replaceEndOfLine } = doc.utils;
 
 // A `WeakMap` rather than a field on the node, because a new field would change the shape the guard compares.
@@ -37,8 +36,12 @@ export function rememberRoot(result: ParseResult): void {
 }
 
 interface WalkOptions {
-    printWidth: number;
-    tabWidth: number;
+    /** Source lines, to find the indentation a copied line break sat at. */
+    lines: string[];
+}
+
+function indentOf(line: string | undefined): number {
+    return line === undefined ? 0 : line.length - line.trimStart().length;
 }
 
 function commentDoc(node: NormalNode): Doc {
@@ -74,10 +77,6 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
         nodeDoc(child, ctx),
     );
     if (chain !== null) return chain;
-    const member = memberChainDoc(node as NormalBranch, (child) =>
-        nodeDoc(child, ctx),
-    );
-    if (member !== null) return member;
     const control = controlDoc(node as NormalBranch, (child) =>
         nodeDoc(child, ctx),
     );
@@ -85,8 +84,28 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
     return branchDoc(node, ctx);
 }
 
+/**
+ * A node with no layout of its own: children with the source's gaps.
+ * After a copied line break, the rest sits at its source column relative to the node's first line,
+ * so a list nested inside indents from where the author put it.
+ */
 function branchDoc(node: NormalBranch, ctx: WalkOptions): Doc {
-    return node.children.map((child) => nodeDoc(child, ctx));
+    const base = indentOf(ctx.lines[node.startPosition.row]);
+    const out: Doc[] = [];
+    let segment: Doc[] = out;
+    for (const child of node.children) {
+        if (child.nodeType === 'Text' && child.text.includes('\n')) {
+            const newlines = child.text.split('\n').length - 1;
+            const column = child.text.length - child.text.lastIndexOf('\n') - 1;
+            const inner: Doc[] = [];
+            const breaks = newlines >= 2 ? [hardline, hardline] : [hardline];
+            out.push(align(Math.max(0, column - base), [...breaks, inner]));
+            segment = inner;
+            continue;
+        }
+        segment.push(nodeDoc(child, ctx));
+    }
+    return out;
 }
 
 function listDoc(
@@ -103,21 +122,41 @@ function listDoc(
     }
 
     const last = items[items.length - 1];
-    return group([
-        list.open,
-        listIndent(
-            listItemsDoc(items, list, ctx),
-            list,
-            last !== undefined && isLineComment(last.node),
-        ),
-        list.close,
-    ]);
+    // The author's layout decides, not the width: a list with a line break breaks one item per line, any other stays on one line.
+    const flat = !node.children.some(
+        (c) => c.nodeType === 'Text' && c.text.includes('\n'),
+    );
+    const closeIndex = node.children.findLastIndex(
+        (c) => c.nodeType === 'Token' && c.text === list.close,
+    );
+    const beforeClose = node.children[closeIndex - 1];
+    const blankAfterOpen = !flat && blankIn(items[0].gap);
+    const blankBeforeClose =
+        !flat && beforeClose?.nodeType === 'Text' && blankIn(beforeClose.text);
+    return group(
+        [
+            list.open,
+            listIndent(
+                [
+                    blankAfterOpen ? hardline : '',
+                    listItemsDoc(items, list, ctx, flat),
+                    blankBeforeClose ? hardline : '',
+                ],
+                list,
+                last !== undefined && isLineComment(last.node),
+                flat,
+            ),
+            list.close,
+        ],
+        { shouldBreak: !flat },
+    );
 }
 
 function listItemsDoc(
     items: ListItem[],
     list: ListDescriptor,
     ctx: WalkOptions,
+    flat: boolean,
 ): Doc {
     const out: Doc[] = [];
 
@@ -146,10 +185,20 @@ function listItemsDoc(
                     next.gap,
                     isLineComment(item.node),
                     isComment(next.node),
+                    flat,
                 ),
             );
         } else {
-            out.push(separatorLine(printed, next.gap, isComment(next.node)));
+            // A block comment stays on the line of the item it annotates, as in `/* x = */ one`.
+            const inlineComment =
+                isComment(item.node) &&
+                !isLineComment(item.node) &&
+                !(next.gap ?? '').includes('\n');
+            out.push(
+                flat || inlineComment
+                    ? ' '
+                    : separatorLine(printed, next.gap, isComment(next.node)),
+            );
         }
     }
 
@@ -213,6 +262,8 @@ function importSectionEnd(items: ListItem[]): number {
             sawImport = true;
             end = i;
         } else if (isComment(items[i].node)) {
+            // A blank line ends the section, so a comment after it belongs to the code below.
+            if (sawImport && blankIn(items[i].gap)) break;
             if (sawImport) end = i;
         } else {
             break;
@@ -230,8 +281,7 @@ export function createPrinter(): Printer<NormalChild> {
 
         print: (path: AstPath<NormalChild>, options: ParserOptions) => {
             const ctx: WalkOptions = {
-                printWidth: options.printWidth ?? 80,
-                tabWidth: options.tabWidth ?? 2,
+                lines: options.originalText.split('\n'),
             };
 
             const node = path.node;

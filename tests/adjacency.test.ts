@@ -30,11 +30,8 @@ function format(
 interface Case {
     readonly source: string;
     readonly printed: string;
-    readonly width: number;
     readonly why: string;
 }
-
-const WIDE = 80;
 
 const CASES = new Map<number, readonly Case[]>([
     [
@@ -43,21 +40,18 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'func f(c : Bool) : Nat { if c { 1 } else { 2 } }',
                 printed: 'func f(c : Bool) : Nat { if c { 1 } else { 2 } }\n',
-                width: WIDE,
                 why: 'an atomic head stays bare — `H5`–`H7` say wrapping `if c` would be a gratuitous change',
             },
             {
                 source: 'func g(x : Nat) : Nat { 1 };\nfunc f(x : Nat) : Nat { if (g(x)) { 1 } else { 2 } }',
                 printed:
                     'func g(x : Nat) : Nat { 1 };\nfunc f(x : Nat) : Nat { if (g(x)) { 1 } else { 2 } }\n',
-                width: WIDE,
                 why: 'an already-parenthesised compound head is reproduced, not double-wrapped (`preserve` does not unwrap either)',
             },
             {
                 source: 'func f(xs : [Nat]) : Nat { if xs[0] { 1 } else { 2 } }',
                 printed:
                     'func f(xs : [Nat]) : Nat { if xs[0] { 1 } else { 2 } }\n',
-                width: WIDE,
                 why: 'the `H1` case: a bare indexed head is `preserve`d even though moc 1.16.0 rejects it — tidying it is `moc2`',
             },
         ],
@@ -68,20 +62,17 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'func f(c : Bool) : Nat { if (c)-1 else 2 }',
                 printed: 'func f(c : Bool) : Nat { if (c)-1 else 2 }\n',
-                width: WIDE,
                 why: 'the `B1` case: a glued unary branch is the exact spelling moc 2.0 rejects, and `preserve` keeps it verbatim — only `moc2` may add the space',
             },
             {
                 source: 'func f(c : Bool) : Nat { if (c) -1 else 2 }',
                 printed: 'func f(c : Bool) : Nat { if (c) -1 else 2 }\n',
-                width: WIDE,
                 why: 'the sharpest row in §2.2: the spaced unary is the one spelling all three parsers accept, and it is what `moc2` must emit',
             },
             {
                 source: 'func f(c : Bool) : any { if (c) #less else #greater }',
                 printed:
                     'func f(c : Bool) : any { if (c) #less else #greater }\n',
-                width: WIDE,
                 why: 'a spaced variant branch (`B5`) is reproduced verbatim; the space is load-bearing',
             },
         ],
@@ -92,38 +83,32 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'let b = x < y',
                 printed: 'let b = x < y\n',
-                width: WIDE,
                 why: '`L3`: a comparison is spaced, so the `>` cannot re-lex as a close-angle',
             },
             {
                 source: 'let x = f<Nat>(1)',
                 printed: 'let x = f<Nat>(1)\n',
-                width: WIDE,
                 why: '`L1`: an instantiation `<` is glued to the callee — `f <Nat>(1)` is the `S3` spelling tree-sitter misreads as a comparison',
             },
             {
-                source: 'let x = f<Nat>(1)',
+                source: 'let x = f<\n  Nat>(1)',
                 printed: 'let x = f<\n  Nat>(1)\n',
-                width: 12,
-                why: '`L1` again, at a width that forces the list to break: the `<` stays glued to `f` and the `>` to `Nat`',
+                why: '`L1` again, in a broken list: the `<` stays glued to `f` and the `>` to `Nat`',
             },
             {
                 source: 'type T = List<List<Nat>>',
                 printed: 'type T = List<List<Nat>>\n',
-                width: WIDE,
                 why: '`L4`: a nested close is one contiguous `>>` — `> >` would end the outer list early',
             },
             {
-                source: 'type F<Alpha, Beta, Gamma> = Alpha;',
+                source: 'type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;\n',
-                width: 20,
                 why: '`L8`: a *broken* angle list glues its close to the last item — `Gamma` then `>` on a new line is `L8`',
             },
             {
-                source: 'func f<Alpha, Beta <: List<Nat>>(a : Alpha) : Beta = a;',
+                source: 'func f<\n  Alpha,\n  Beta <: List<Nat>>(\n  a : Alpha\n) : Beta = a;',
                 printed:
                     'func f<\n  Alpha,\n  Beta <: List<Nat>>(\n  a : Alpha\n) : Beta = a;\n',
-                width: 20,
                 why: '`L8` and `L4` together: an item that itself ends a nested angle list still leaves the outer `>>` contiguous',
             },
         ],
@@ -134,19 +119,16 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'let x = a ?? b',
                 printed: 'let x = a ?? b\n',
-                width: WIDE,
                 why: '`C1`/`C6`: `??` is spaced and never broken, so its leading `?` cannot become a second option type',
             },
             {
                 source: 'let x : ? ?Nat = null',
                 printed: 'let x : ? ?Nat = null\n',
-                width: WIDE,
                 why: '`C7`: the space between the two `?` is meaning-bearing and is reproduced',
             },
             {
                 source: 'let x : ??Nat = null',
                 printed: 'let x : ??Nat = null\n',
-                width: WIDE,
                 why: '`C7` in the other direction: a tight `??` type stays tight — `preserve` may not re-space it into an operator',
             },
         ],
@@ -157,14 +139,7 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'let s = 5.toText()',
                 printed: 'let s = 5.toText()\n',
-                width: WIDE,
                 why: '`D1`/`S1`: the number-dot is glued — tree-sitter is too permissive here, so the guard cannot be the thing that catches it',
-            },
-            {
-                source: 'let s = 5.toText()',
-                printed: 'let s = 5.toText()\n',
-                width: 8,
-                why: '`D2`: a narrow width must not introduce a space after the dot, which would re-lex as Float access',
             },
         ],
     ],
@@ -174,20 +149,12 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'let v = #ok(1)',
                 printed: 'let v = #ok(1)\n',
-                width: WIDE,
                 why: '`P1`: `#` is glued to its tag',
             },
             {
                 source: 'let s = "a" # "b"',
                 printed: 'let s = "a" # "b"\n',
-                width: WIDE,
                 why: '`P2`/`P3`: a concat `#` is spaced on both sides — the opposite treatment to a variant tag, which is why the seam needs a role, not a character',
-            },
-            {
-                source: 'let s = "a" # "b"',
-                printed: 'let s = "a" # "b"\n',
-                width: 8,
-                why: 'and the spacing survives a width too narrow to fit the line',
             },
         ],
     ],
@@ -197,26 +164,22 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'func f() { a := b }',
                 printed: 'func f() { a := b }\n',
-                width: WIDE,
                 why: '`:=` is one token — `a : = b` is a syntax error',
             },
             {
                 source: 'func f() { let x = a ** b }',
                 printed: 'func f() { let x = a ** b }\n',
-                width: WIDE,
                 why: '`**` is one token',
             },
             {
                 source: 'func f() { let x = a +% b }',
                 printed: 'func f() { let x = a +% b }\n',
-                width: WIDE,
                 why: 'a wrapping operator is one token',
             },
             {
-                source: 'func f() { let x = aaaaaaaa >> bbbbbbbb }',
-                printed: 'func f() {\n  let x = aaaaaaaa >> bbbbbbbb\n}\n',
-                width: 12,
-                why: '§2.7: the shift `>>` must never be split across a line — the two `>` come from one token',
+                source: 'func f() {\n  let x = aaaaaaaa >>\n    bbbbbbbb\n}',
+                printed: 'func f() {\n  let x = aaaaaaaa >>\n    bbbbbbbb\n}\n',
+                why: '§2.7: a chain broken at a shift keeps `>>` whole — the two `>` come from one token',
             },
         ],
     ],
@@ -224,15 +187,13 @@ const CASES = new Map<number, readonly Case[]>([
         8,
         [
             {
-                source: 'type F<Alpha, Beta /*c*/> = Alpha;',
+                source: 'type F<\n  Alpha,\n  Beta /*c*/> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta /*c*/> = Alpha;\n',
-                width: 20,
                 why: '§4.1: a comment in the glued angle seam is the glue itself — a whitespace gap before `>` is rejected by moc even with the comment present, so the comment may not be moved onto its own line; it doubles as an `L8` case, and fails if the close is not glued',
             },
             {
                 source: 'type F<Alpha, Beta\n  /*c*/> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta\n  /*c*/> = Alpha;\n',
-                width: 20,
                 why: '§4.1 pair: an own-line comment stays on its own line, so the case above is asserting attachment and not merely the comment existing',
             },
         ],
@@ -243,21 +204,12 @@ const CASES = new Map<number, readonly Case[]>([
             {
                 source: 'let x : ??Nat = null',
                 printed: 'let x : ??Nat = null\n',
-                width: WIDE,
                 why: '`S5`: tree-sitter is blind to the `??`-versus-two-options seam, so `preserve` reproduces it rather than normalising it',
             },
             {
                 source: 'let v = #ok(1)',
                 printed: 'let v = #ok(1)\n',
-                width: WIDE,
                 why: '`S5`: same for the tight `#` variant seam',
-            },
-            {
-                source: 'func f() { let x = aaaaaaaabbbbbbbb#ccccccccdddddddd }',
-                printed:
-                    'func f() {\n  let x = aaaaaaaabbbbbbbb#ccccccccdddddddd\n}\n',
-                width: 12,
-                why: '`S5`: a tight `#` is a variant tag, so normalising it to `a # b` would change the program — the chain printer refuses and the seam survives a width that forces a break',
             },
         ],
     ],
@@ -270,9 +222,7 @@ describe('the adjacency checklist', () => {
         describe(`item ${item.n}: ${item.rule}`, () => {
             for (const c of CASES.get(item.n) ?? []) {
                 test(`${c.why} — ${JSON.stringify(c.source)}`, async () => {
-                    await expect(
-                        format(c.source, { printWidth: c.width }),
-                    ).resolves.toBe(c.printed);
+                    await expect(format(c.source)).resolves.toBe(c.printed);
                 });
             }
         });

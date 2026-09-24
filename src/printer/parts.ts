@@ -136,10 +136,10 @@ export function separatorLine(
 ): Doc {
     // A `line` here would break under the comment's `breakParent` and detach it from its item.
     if (nextIsComment && (gap === null || !gap.includes('\n'))) return ' ';
-    if (left !== '' && willBreak(left)) return hardline;
     if (gap !== null && gap.length - gap.replaceAll('\n', '').length >= 2) {
         return [hardline, hardline];
     }
+    if (left !== '' && willBreak(left)) return hardline;
     return line;
 }
 
@@ -164,8 +164,10 @@ export function betweenSeparator(
     gap: string | null,
     leftIsLineComment = false,
     rightIsComment = false,
+    flat = false,
 ): Doc {
     const sep = separatorChar(family);
+    if (flat) return [sep, ' '];
     if (leftIsLineComment)
         return [hardline, sep, separatorLine(left, gap, rightIsComment)];
     return [sep, separatorLine(left, gap, rightIsComment)];
@@ -224,7 +226,8 @@ export function verbatim(node: NormalNode): Doc {
     return doc.utils.replaceEndOfLine(node.text);
 }
 
-export function innerBreak(list: ListDescriptor): Doc {
+export function innerBreak(list: ListDescriptor, flat = false): Doc {
+    if (flat) return list.spaced ? ' ' : '';
     return list.spaced ? line : softline;
 }
 
@@ -232,8 +235,11 @@ export function listIndent(
     joined: Doc,
     list: ListDescriptor,
     lastIsLineComment = false,
+    flat = false,
 ): Doc {
-    const b = innerBreak(list);
+    const b = innerBreak(list, flat);
+    // A flat list adds no indent, so a broken item it hugs (`f([ … ])`) keeps the author's indentation.
+    if (flat) return [b, joined, list.closeGlued ? glue() : b];
     if (list.closeGlued && lastIsLineComment)
         return [indent([b, joined]), hardline];
     if (list.closeGlued) return [indent([b, joined]), glue()];
