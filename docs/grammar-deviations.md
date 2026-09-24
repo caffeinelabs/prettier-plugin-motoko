@@ -44,23 +44,88 @@ Probe scripts (run with `node .probe/<name>.mjs` from the repo root unless noted
 
 ## Summary table
 
-| #   | deviation                                     | ts                          | moc                              | severity                          |
-| --- | --------------------------------------------- | --------------------------- | -------------------------------- | --------------------------------- |
-| 1   | `if g(1) -1 > 0 {}`                           | parses (as `g(1) - 1 > 0`)  | **rejects**                      | **critical**                      |
-| 2   | `if (c) -h {} else {5}`                       | `bin_exp[(c) - h]` + branch | `CallE(h, {})` negated           | **critical**                      |
-| 3   | Spaced type application `List <T>`            | **ERROR**                   | accepts                          | **critical**                      |
-| 4   | Flat operator precedence                      | all one left-assoc level    | real precedence table            | **critical**                      |
-| 5   | `@`-privileged identifiers                    | **unreachable rule**        | accepts                          | **critical**                      |
-| 6   | `shared composite func`                       | parses (wrongly)            | **rejects**                      | high                              |
-| 7   | `shared query composite func`                 | parses (wrongly)            | **rejects**                      | high                              |
-| 8   | `??` token eats one trailing space            | token text `"?? "`          | split token                      | high                              |
-| 9   | `<` / `>` need whitespace on **both** sides   | accepts both readings       | rejects one-sided                | medium                            |
-| 10  | `5.toText()` int_literal leaf `"5."`          | different node shape        | `DotE(LitE 5, …)`                | medium                            |
-| 11  | `!x` prefix, `x!` postfix                     | **ERROR** / bang exp        | rejects `!x`                     | low                               |
-| 12  | Object-type member shapes                     | accepts more than moc       | rejects `shared f :`, `func f :` | low                               |
-| 13  | `doc/schat.mo`                                | 8 error nodes               | rejects at the same construct    | n/a (dead file)                   |
-| 14  | `include I;` sets no `isError`/`isMissing`    | error, but unflagged        | rejects                          | **high** (error reporting)        |
-| 15  | Keywords are not reserved (`let system = 1;`) | accepts as `identifier`     | rejects                          | low (printer) / medium (upstream) |
+| #   | deviation                                      | ts                          | moc                              | severity                          |
+| --- | ---------------------------------------------- | --------------------------- | -------------------------------- | --------------------------------- |
+| 1   | `if g(1) -1 > 0 {}`                            | parses (as `g(1) - 1 > 0`)  | **rejects**                      | **critical**                      |
+| 2   | `if (c) -h {} else {5}`                        | `bin_exp[(c) - h]` + branch | `CallE(h, {})` negated           | **critical**                      |
+| 3   | Spaced type application `List <T>`             | **ERROR**                   | accepts                          | **critical**                      |
+| 4   | Flat operator precedence                       | all one left-assoc level    | real precedence table            | **critical**                      |
+| 5   | `@`-privileged identifiers                     | **unreachable rule**        | accepts                          | **critical**                      |
+| 6   | `shared composite func`                        | parses (wrongly)            | **rejects**                      | high                              |
+| 7   | `shared query composite func`                  | parses (wrongly)            | **rejects**                      | high                              |
+| 8   | `??` token eats one trailing space             | token text `"?? "`          | split token                      | high                              |
+| 9   | `<` / `>` need whitespace on **both** sides    | accepts both readings       | rejects one-sided                | medium                            |
+| 10  | `5.toText()` int_literal leaf `"5."`           | different node shape        | `DotE(LitE 5, …)`                | medium                            |
+| 11  | `!x` prefix, `x!` postfix                      | **ERROR** / bang exp        | rejects `!x`                     | low                               |
+| 12  | Object-type member shapes                      | accepts more than moc       | rejects `shared f :`, `func f :` | low                               |
+| 13  | `doc/schat.mo`                                 | 8 error nodes               | rejects at the same construct    | n/a (dead file)                   |
+| 14  | `include I;` sets no `isError`/`isMissing`     | error, but unflagged        | rejects                          | **high** (error reporting)        |
+| 15  | Keywords are not reserved (`let system = 1;`)  | accepts as `identifier`     | rejects                          | low (printer) / medium (upstream) |
+| 16  | A bare `case`/`catch` clause is an application | accepts as `exp_dec`        | **rejects**                      | low (printer) / medium (fixtures) |
+
+---
+
+## 16. A bare `case`/`catch` clause parses as an application chain
+
+§15 says the grammar has no notion of a reserved word. This is that same mechanism in **clause
+position**, and it is filed separately because it is the reason four legacy test fragments could not
+be ported: what the fragments look like is a clause, and what they parse as is an ordinary
+expression.
+
+**Repro**
+
+```motoko
+case _ (i)
+```
+
+and five more of the same shape: `case _ [i]`, `catch _ (i)`, `catch _ [i]`, `case a (b)`,
+`catch e h`.
+
+**tree-sitter** — parses clean, with **no clause node anywhere in the tree**. All six reduce to an
+`exp_dec`:
+
+```
+case _ (i)   exp_dec(call_exp_object(call_exp_object(var_exp(identifier) ? wild_exp(_)) ? par_exp(( var_exp(identifier) ))))
+case _ [i]   exp_dec(array_idx_exp_object(call_exp_object(var_exp(identifier) ? wild_exp(_)) ? [ var_exp(identifier) ]))
+case a (b)   exp_dec(call_exp_object(call_exp_object(var_exp(identifier) ? var_exp(identifier)) ? par_exp(( var_exp(identifier) ))))
+catch e h    exp_dec(call_exp_object(call_exp_object(var_exp(identifier) ? var_exp(identifier)) ? var_exp(identifier)))
+```
+
+`case` (and `catch`) are **named rules**, not tokens: `case` at `grammar.js:1050`, `catch` at
+`grammar.js:1075`, and each is reachable _only_ as a child of `switch_exp` (`grammar.js:984`) or
+`try_exp` (`grammar.js:930`). Off those two parents the literal `"case"` can never shift, so the
+word falls through to `identifier: /[a-zA-Z_][a-zA-Z_0-9]*/` (`grammar.js:400`) — the same
+unreserved regex §15 names — and the rest is just application. `case _ (i)` is `case` applied to
+`_`, then applied to `(i)`.
+
+**moc** — `SYNTAX` on all four builds (`1.1.0`, `1.16.1` `rel1.16`, `1.16.1-26-g1d57a4fc7b` `pin`,
+`2.0.0-beta.1` `v2`), because `CASE`/`CATCH` are `%token`s and a program may not begin with one.
+
+**The control.** The same seam _inside_ a `switch` is `TYPE` on all four — the parse succeeds and
+reaches the typechecker:
+
+```motoko
+switch x { case _ (i) 1 }   // 1.1.0=TYPE  rel1.16=TYPE  pin=TYPE  v2=TYPE
+```
+
+**The printer holds.** All six fragments round-trip **byte for byte** and are fixed points (`out`
+equals `in` for every row above, measured with `.probe/_clause.mts`). That is the behaviour §15's
+formatter rule asks for: `var_exp > identifier` is authoritative for the token's text, so `case`
+prints as `case`, and nothing extends the `tight-apply` rewrite to a bare spaced callee. `preserve`
+is not violated — the printer never turns this into `case_(_)(i)`.
+
+**Severity: low for the printer, medium for fixture hygiene.** The printer's output is correct for
+the input it was given, and the input is already invalid. The cost is on the _test_ side: a legacy
+test that asserts these four fragments print unchanged would snapshot a tree-sitter-only spelling
+and record it as printer behaviour. That is why the `wildcard identifier` group's four bare
+fragments are not ported at their legacy spelling — the _identical_ seam is exercised in
+`tests/format/expressions/parens-heads-and-seams.mo` inside a real `switch`, where all four mocs
+accept it.
+
+**Formatter rule.** Do not add a top-level `case`/`catch` production to compensate. The tree is the
+source of truth here as everywhere (§15), and a file whose first token is `case` is invalid under
+every moc; widening the grammar to match tree-sitter's accidental reading would only make the
+deviation legal, not correct.
 
 ---
 
