@@ -32,7 +32,7 @@
     "devDependencies": {
         "@types/node": "^22.20.3",
         "prettier": "^3.5.3",
-        "tree-sitter-motoko": "0.2.0",
+        "tree-sitter-motoko": "0.2.1",
         "typescript": "^6.0.3",
         "vitest": "^3.2.7"
     },

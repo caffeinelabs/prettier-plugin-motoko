@@ -643,9 +643,9 @@ export const ALL_NODE_KINDS: readonly NodeKind[] = Object.keys(
     NODE_KINDS,
 ) as NodeKind[];
 
-export const GRAMMAR_VERSION = '0.2.0';
+export const GRAMMAR_VERSION = '0.2.1';
 
 export const HEAD_SYMBOL_IDS: ReadonlySet<number> = new Set([
-    191, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 272, 273, 274, 275,
-    276, 277, 278, 279, 280,
+    192, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 273, 274, 275, 276,
+    277, 278, 279, 280, 281,
 ]);

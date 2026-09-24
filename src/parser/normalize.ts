@@ -213,12 +213,62 @@ export function normalize(root: TsNode, source: string): NormalBranch {
     }
 
     const bounds = { startIndex: 0, endIndex: source.length };
-    return finish(
+    const tree = finish(
         root,
         null,
         buildChildrenOf(root, bounds.startIndex, bounds.endIndex),
         bounds,
     );
+    hoistTrailingWhitespace(tree);
+    return tree;
+}
+
+/**
+ * `<` and `??` absorb the whitespace after them into the token, where the grammar uses it to decide what they mean.
+ * Moves it out of the token and every node ending with it, into the gap that follows, as if the grammar hadn't absorbed it.
+ */
+function hoistTrailingWhitespace(node: NormalBranch): void {
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i += 1) {
+        const child = kids[i];
+        if (child.nodeType === 'Text') continue;
+        let moved: NormalText | null = null;
+        if (child.nodeType === 'Branch') {
+            hoistTrailingWhitespace(child);
+            const last = child.children[child.children.length - 1];
+            if (last?.nodeType === 'Text' && child !== node) {
+                child.children.pop();
+                child.text = child.text.slice(
+                    0,
+                    child.text.length - last.text.length,
+                );
+                child.endIndex = last.startIndex;
+                child.endPosition = last.startPosition;
+                moved = last;
+            }
+        } else if (!child.extra && child.text !== child.text.trimEnd()) {
+            const text = child.text.trimEnd();
+            const cut = child.startIndex + text.length;
+            moved = {
+                nodeType: 'Text',
+                text: child.text.slice(text.length),
+                startIndex: cut,
+                endIndex: child.endIndex,
+                startPosition: child.endPosition,
+                endPosition: child.endPosition,
+            };
+            child.text = text;
+            child.endIndex = cut;
+        }
+        if (moved === null) continue;
+        const next = kids[i + 1];
+        if (next?.nodeType === 'Text') {
+            next.text = moved.text + next.text;
+            next.startIndex = moved.startIndex;
+        } else {
+            kids.splice(i + 1, 0, moved);
+        }
+    }
 }
 
 export function checkRoundTrip(
