@@ -14,6 +14,49 @@ regressions into "expected" snapshots.
 
 So every test gets a verdict before it becomes a fixture.
 
+## What the suite actually is, measured
+
+The counts this file inherited from prose — "68 formatter tests and 34 organize-imports tests", 102
+total — are **test functions**, not `format()` calls, and the difference is not cosmetic. Both
+suites are tables whose bodies are `async` and whose `format` calls sit _after_ an `await`, so a
+naive reading (and a synchronous recorder) sees one call per test and reports 102. Running the
+suites' own bodies in registration order gives the real number:
+
+| suite            | test functions | **`format()` calls** |
+| ---------------- | -------------- | -------------------- |
+| formatter        | 68             | **289**              |
+| organize-imports | 34             | **34**               |
+| total            | 102            | **323**              |
+
+So the port is 323 cases, not 102. Each case is measured rather than read: `tools/legacy-extract.mjs`
+records the `(input, options)` pairs, `tools/legacy-golden.mjs` replays them through a pinned
+`prettier-plugin-motoko@0.13.0` for its goldens, and `tools/legacy-port.mjs` writes the ledger
+(`.probe/port-ledger.json`) that says, per case, what the new engine emits, whether it is a fixed
+point, and how it differs from 0.13.
+
+### The throws are the contract, not regressions
+
+47 of the 323 call the new engine on input it refuses. That reads like a regression and is not one.
+`tools/probe/moc-validity.py` replays every input against a real moc 2.0 and judges validity by
+`syntax error` in the compiler's output (`moc`'s exit code is 0 for valid and invalid alike):
+
+|                   | moc-valid | moc-invalid |
+| ----------------- | --------- | ----------- |
+| **throws**        | **0**     | 47          |
+| matches 0.13      | 132       | 5           |
+| differs from 0.13 | 138       | 1           |
+
+**Zero throws on moc-valid input.** Every input the new parser refuses is one the compiler refuses
+too, so refusing with a located `MotokoSyntaxError` is the new strict contract working, not a gap.
+The five `moc-invalid` cases that _match_ 0.13 are arm fragments rather than whole programs
+(`case (x) [x];`, `case _ (i)`) — incomplete by construction, which is why the compiler rejects them
+and why the new engine reproducing 0.13 byte-for-byte on them is fine.
+
+The one `differs` on moc-invalid input is `import with missing semicolon at end`. It is the only case
+in the whole port that was ever **not a fixed point**, and the mechanism is worth reading before
+anyone touches `readSection`: see
+[§ Organize-imports suite](#organize-imports-suite-34-tests-34-format-calls) below.
+
 ## The three verdicts
 
 | verdict    | meaning                                                                   | when writing the fixture                                                |
@@ -32,9 +75,32 @@ decisions in [formatter-rework.md](formatter-rework.md):
    converts `//` to `/* */` inside `<…>`. Tests that assert that conversion are **change**.
 3. **`.did` is dropped** and Candid is out of scope, so any Candid-shaped test is **delete**.
 
-## Formatter suite (68 tests)
+## Formatter suite (68 tests, 289 `format()` calls)
 
 Grouped by the surprise, not by source order — the grouping is what tells a reviewer where to look.
+
+Where the three deliberate decisions above are the _cause_ of a difference, the ledger confirms it;
+where they are not, the difference is the interesting part. Of the 116 formatter cases that differ
+from 0.13 (37 throw, so 116 of the 252 that run):
+
+- **14** are the semicolon rule alone — normalising `;` before a line end or `}` makes them identical;
+- **102** differ in something else, and no single cause dominates: the largest cluster is the
+  **null coalesce operator** (18), then spacing around `-` and `+` (8 and 7, the same
+  `1-1` / `1 - 1` question), `no delimiter for record extension` (5), `lines before/after group` (5),
+  and a long tail of 1–4 case clusters.
+
+The operator clusters are mostly the **`preserve` printer keeping the source's spacing**, which is
+its contract: `a  ??  b` stays `a  ??  b` and `1-1` stays `1-1` where 0.13 canonicalised both. That
+is expected for M2 and is exactly what the `moc2` mode exists to change later — but it means these
+differences are _not_ automatically correct, because `-` and `+` are the one operator family
+[adjacency.md](adjacency.md) marks as **not** free-spaced (§2.9 lists what is safe to re-lay-out,
+and `-`/`+`/`^` operands are not in it; §3.1–3.2 name the bare-minus seams as grammar deviations).
+Each such case must be cross-checked against adjacency.md before its verdict, per the "the table wins
+and the test is a change" rule below.
+
+So "every semicolon test is a change" is right but is **14 cases, not a majority**. The bulk of the
+port's work is the operator-spacing tail, and each of those cases needs a verdict from the ledger
+rather than from this prose.
 
 ### Semicolons and trailing delimiters — all **change**
 
@@ -116,11 +182,20 @@ is the paren rule, and the plan's flat-precedence finding ("the printer may neve
 parens around operators") means it must be rewritten around the _whole_ flat chain, not around
 per-operator precedence. **Change.**
 
-## Organize-imports suite (34 tests)
+## Organize-imports suite (34 tests, 34 `format()` calls)
 
-This suite survives nearly intact, because organizing imports is a reimplementation on `import`
-nodes and the plan calls it "far simpler than today". The _behaviour_ is the spec; the _old
-implementation_ is not.
+This suite survives nearly intact **in behaviour**, because organizing imports is a reimplementation
+on `import` nodes and the plan calls it "far simpler than today". The _behaviour_ is the spec; the
+_old implementation_ is not.
+
+The ledger needs one caution attached to that word "intact", because it reads misleadingly at a
+glance: only **1 of the 24** well-formed cases matches 0.13 byte-for-byte (`preserve code after
+imports`). But that is 24 of 24 cases organizing the imports **identically** — the diffs are the
+printer, not the pass. Measured: **20 of the 23** differing cases are explained by the semicolon rule
+alone (`;` between `}`-terminated items, and no `;` after the last one), and the remaining three are
+printer layout (`no imports to organize`, `preserve spacing between imports and code`, and the
+missing-semicolon case below). So the import section itself is not what changed — the file around it
+is. Compare `basic`: 0.13 emits `…\n\nactor {};\n` and the new engine emits `…\n\nactor {}\n`.
 
 - **keep** — all of: `basic`, `group imports by prefix`, `combine imports from same path`, `sort
 destructured fields`, `handle aliased imports`, `preserve code after imports`, `no imports to
@@ -144,30 +219,71 @@ its tests are pure input/output pairs that port cleanly to fixtures.
 
 These assert that malformed imports are handled without crashing. On the new engine a malformed
 import is a **parse error**, so most of these become "the format call throws a `SyntaxError` with a
-location" — which is a _better_ contract and a deliberate change. One of them
-(`import with missing semicolon at end`) needs care: the grammar requires `;` between items, so this
-is a parse error, not an organize-imports concern.
+location" — which is a _better_ contract and a deliberate change. All eleven are `moc-invalid`, so
+the compiler rejects them for the same reason the parser does.
+
+`import with missing semicolon at end` needs care, and the inherited note here ("the grammar requires
+`;` between items, so this is a parse error") is **not what happens**. Measured:
+
+```
+import Array "mo:base/Array"      <- no `;`
+import Text "mo:base/Text";
+
+actor {}
+```
+
+moc rejects this (`unexpected token 'import'`), and so does the new parser — but not by throwing.
+`import` is an ordinary identifier in expression position, so the second statement is parsed as a
+**call expression** `import(Text)("mo:base/Text")`, and the file parses clean. Organize-imports then
+read a section one import long, left the rest in the tail, and re-spaced it: a partial rewrite, so
+`format(format(x)) != format(x)`. This was the ledger's only `not idempotent` entry, now fixed —
+the pass refuses a section containing such a node, and `tests/format/organize-imports/missing-semicolon.mo`
+pins the refusal. 0.13 handled it by appending a stray `;` to the trailing `actor {};`.
 
 ## Counting the port
 
-Against the 102 tests:
+Against the 323 measured `format()` calls, the ledger's state **as of the current tree** (regenerate
+with `node tools/legacy-port.mjs`; the per-case detail is in `.probe/port-ledger.json`):
 
-- **keep**: ~71
-- **change**: ~20
-- **delete**: ~11 (the malformed-import crash-tolerance group, and any test whose only content is
-  the old semicolon line-shape table)
+| suite            | calls | throws | matches 0.13 | differs | not idempotent |
+| ---------------- | ----- | ------ | ------------ | ------- | -------------- |
+| formatter        | 289   | 37     | 136          | 116     | 0              |
+| organize-imports | 34    | 10     | 1            | 23      | 0              |
+| total            | 323   | 47     | 137          | 139     | 0              |
 
-These numbers are an estimate to be corrected as fixtures are written; they are stated so a reviewer
-can check the shape of the port rather than trusting a bare "ported" claim. The exact per-test
-verdict is recorded in each fixture's header comment when M2 writes them, and this file is updated
-to match.
+`throws` and `differs` are not verdicts, but they bound them: a `throws` case cannot be a **keep**
+(the behaviour it pinned is now a located error), and a `differs` case is either a **change** or a
+bug. The prose estimates this section used to carry — "keep ~71, change ~20, delete ~11" against 102
+tests — are superseded; the verdicts are now derived per case and recorded in each fixture's header
+comment as M2 writes them.
 
 ## What is deliberately NOT ported
 
-- `tests/compiler.test.ts` — it reads Motoko test files from `../motoko` and is skipped in CI. The
-  new equivalent is the corpus job (`tools/corpus/`), which covers far more. **Delete.**
-- `tests/cli.test.ts` — the old `mo-fmt` CLI is replaced wholesale by M4. **Delete**, and M4 writes
-  its own.
+Both suites that are not ported now sit in `tests/legacy/` (see its `README.md` for why the whole
+legacy directory is quarantined there), so these are deletions of files that already exist at the
+paths named:
+
+- `tests/legacy/compiler.test.ts` — it reads Motoko test files from `../motoko` and is skipped in
+  CI. The new equivalent is the corpus job (`tools/corpus/`), which covers far more. **Delete.**
+- `tests/legacy/cli.test.ts` — the old `mo-fmt` CLI is replaced wholesale by M4. **Delete**, and M4
+  writes its own.
 - `tests/test-webapp/` — the Vite app pinned to the old wasm. Replaced by `.probe/hosts/vite/`.
   **Delete**, but keep the CI intent: the plan requires the web job to _format a snippet in a
   headless browser_, not just build.
+
+### Two cautions on the plan's own wording
+
+The quoted plan is accurate about counts but leaves two things to the reader, and both bite the port:
+
+1. It says fixtures live in "`tests/format/**` and `tests/rewrite/**`". Only `tests/format/` exists
+   in this tree, and three different destination names are now in play for the organize cases — the
+   plan's `tests/rewrite/**`, `tests/legacy/README.md`'s `tests/format/imports/**`, and the
+   `tests/format/organize-imports/` the first ported case already sits in. Take the last one: it is
+   what exists, the fixture harness and shared snapshot already key off it, and `tests/format/imports/`
+   is _already occupied_ by a different thing — the printer's import-section fixtures
+   (`comment-in-section.mo`, `extra-blanks.mo`, `glued-section.mo`, `no-imports.mo`), which exercise
+   `print` on an import section, not the `motokoOrganizeImports` pass. Putting the organize ports
+   there would collide two unrelated suites in one directory under one snapshot file.
+2. The 68/34 test-function counts it quotes are **test functions**, not cases — see
+   [§ What the suite actually is, measured](#what-the-suite-actually-is-measured). Port 323 fixtures,
+   not 102.
