@@ -11,7 +11,13 @@
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "verbatimModuleSyntax": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        // Same pair the root config documents, for the same reason: the probes load the plugin
+        // straight from source with the explicit `.ts` specifier Node's `--experimental-strip-types`
+        // needs, and typechecking them is worth having — it is what caught the implicit `any` in
+        // `tools/probe/churn/qroneitem.mts`. `allowImportingTsExtensions` is no-emit-only and this
+        // config already sets `noEmit`, so `rewriteRelativeImportExtensions` is not needed here.
+        "allowImportingTsExtensions": true
     },
     "include": ["tools"]
 }

@@ -13,6 +13,10 @@ package-lock.json
 # Untracked scratch space. `.probe/` holds the one-off scripts and JSON dumps the M1/M2 specs were
 # derived from; `.claude/` holds local agent config and worktrees. Neither is committed, so neither
 # should be able to fail `format:check` in CI.
+#
+# The probes a review cites are not scratch — they are committed under `tools/probe/` and are
+# formatted like the rest of the tracked tree, so a reader can re-run the claim and `format:check`
+# still covers it. Only the uncommitted `.probe/` is ignored here.
 /.probe/
 /.claude/
 
