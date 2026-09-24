@@ -23,7 +23,8 @@
         "gen:node-types": "node --experimental-strip-types tools/gen-node-types.ts",
         "gen:node-types:check": "node --experimental-strip-types tools/gen-node-types.ts --check",
         "package": "cd packages/mo-fmt && npm run package",
-        "prepublishOnly": "npm run build"
+        "prepublishOnly": "npm run build",
+        "probe:perturb": "node tools/probe/perturb-sweep.mjs"
     },
     "devEngines": {
         "runtime": {
