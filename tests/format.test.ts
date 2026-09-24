@@ -1,5 +1,5 @@
 // Snapshots each `tests/format/<area>/*.mo` fixture's formatted output and asserts it is a fixed point.
-// Fixtures are deliberately non-canonical inputs, and a separate idempotence check catches a printer that oscillates between passes.
+// Fixtures are deliberately non-canonical, so the fixed point is checked on the output, which catches a printer that oscillates.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';

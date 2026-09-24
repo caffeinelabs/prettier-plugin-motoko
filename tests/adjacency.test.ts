@@ -40,7 +40,6 @@ interface Case {
 
 const WIDE = 80;
 
-// Keyed by checklist item number, so the completeness tests below can index by `CHECKLIST[].n`.
 const CASES = new Map<number, readonly Case[]>([
     [
         1,
@@ -230,14 +229,12 @@ const CASES = new Map<number, readonly Case[]>([
         8,
         [
             {
-                // Moving the comment onto its own line would re-lex the `>` as the greater-than operator, a syntax error.
                 source: 'type F<Alpha, Beta /*c*/> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta /*c*/> = Alpha;\n',
                 width: 20,
                 why: '§4.1: a comment in the glued angle seam is the glue itself — a whitespace gap before `>` is rejected by moc even with the comment present, so the comment may not be moved onto its own line; it doubles as an `L8` case, and fails if the close is not glued',
             },
             {
-                // The same list with an own-line comment keeps it there: `preserve` reproduces the author's attachment.
                 source: 'type F<Alpha, Beta\n  /*c*/> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta\n  /*c*/> = Alpha;\n',
                 width: 20,
@@ -261,8 +258,7 @@ const CASES = new Map<number, readonly Case[]>([
                 why: '`S5`: same for the tight `#` variant seam',
             },
             {
-                // The chain printer normalises operator spacing, and this pins that it stops at `#`.
-                // `#` may not trail a line (`mayTrail`), so `planChain` refuses the chain and the source-gap printer keeps it.
+                // `mayTrail` rejects `#`, so `planChain` refuses the chain and the source-gap fallback keeps it.
                 source: 'func f() { let x = aaaaaaaabbbbbbbb#ccccccccdddddddd }',
                 printed:
                     'func f() {\n  let x = aaaaaaaabbbbbbbb#ccccccccdddddddd\n}\n',
@@ -348,7 +344,7 @@ describe('item 7: the indivisible operators are a value, not a chain of ifs', ()
 describe('item 8: a comment in a glued seam is a conflict', () => {
     test('only a non-blank comment in a glued seam conflicts', () => {
         expect(commentSplitsSeam('/*c*/', true)).toBe(true);
-        // A free-spaced seam is ordinary layout: every area printer handles a comment there.
+        // A comment in a free-spaced seam is ordinary layout.
         expect(commentSplitsSeam('/*c*/', false)).toBe(false);
         expect(commentSplitsSeam('   ', true)).toBe(false);
     });

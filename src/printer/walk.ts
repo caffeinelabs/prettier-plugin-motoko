@@ -50,7 +50,6 @@ export function rememberRoot(result: ParseResult): void {
 
 interface WalkOptions {
     // `semi` and `trailingComma` are deliberately not read: adding or dropping a separator changes the tokens the guard compares.
-    /** Handed to `printDocToString` so a nested render agrees with the outer one. */
     printWidth: number;
     tabWidth: number;
 }
@@ -79,7 +78,7 @@ function blankIn(gap: string | null): boolean {
     return gap.length - gap.replaceAll('\n', '').length >= 2;
 }
 
-/** Comments are checked before the list table: a comment is a list item by `parts.ts`'s structural rule, and must not print as a list. */
+/** Comments are checked first, so a comment `Token` or `Branch` never prints without its `breakParent`. */
 function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
     if (node.nodeType === 'Text') return gapDoc(node.text);
     if (isComment(node)) return commentDoc(node);
@@ -87,12 +86,11 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
 
     const list = listOf(node);
     if (list) return listDoc(node, list, ctx);
-    // Area printers return `null` for a node they do not own, so anything unrecognised falls through to the byte-exact fallback.
+    // Area printers return `null` for a node they do not own, so anything unrecognised falls through to the source-gap fallback.
     const chain = binaryChainDoc(node as NormalBranch, (child) =>
         nodeDoc(child, ctx),
     );
     if (chain !== null) return chain;
-    // Binary chains first, so a chain of `+`s is never examined as a member chain.
     const member = memberChainDoc(node as NormalBranch, (child) =>
         nodeDoc(child, ctx),
     );
@@ -127,7 +125,6 @@ function listDoc(
             : [list.open, list.close];
     }
 
-    // A line comment cannot have the close after it on its line, so a glued close breaks for that one case.
     const last = items[items.length - 1];
     return group([
         list.open,
@@ -164,8 +161,7 @@ function listItemsDoc(
         }
 
         const next = items[i + 1];
-        // The right side is passed too: a comment the source wrote on this item's line stays there,
-        // and only `next.gap` says where it was.
+        // The right side is passed too: only `next.gap` says whether a comment sat on this item's line and must stay there.
         if (item.separated) {
             out.push(
                 betweenSeparator(

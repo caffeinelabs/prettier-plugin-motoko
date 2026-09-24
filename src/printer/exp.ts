@@ -4,7 +4,7 @@
  * A binary chain breaks after each operator into one indented run, and a `|>` pipeline breaks before each `|>`.
  * The grammar's binary-operator precedence is flat, so chains are laid out flat and parens are never added or removed.
  * Flat, `line` prints one space, so a chain that fits reprints exactly as `a + b + c` and the guard's token texts survive.
- * A chain holding a comment, a `#`, or an indivisible operator falls back unbroken: falling back is always correct, guessing isn't.
+ * A chain holding a comment, a `#`, or an indivisible operator other than `|>` falls back unbroken: falling back is always correct, guessing isn't.
  */
 
 import { doc } from 'prettier';
