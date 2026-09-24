@@ -202,8 +202,8 @@ const BREAKING: Case[] = [
 const COMMENTS: Case[] = [
     {
         source: 'let x = 1; // hi\nlet y = 2',
-        printed: 'let x = 1;\n// hi\nlet y = 2\n',
-        why: 'a comment that ends a line does not run into the declaration after it',
+        printed: 'let x = 1; // hi\nlet y = 2\n',
+        why: 'a comment that ends a line stays on it, and the next declaration starts a fresh line',
     },
     {
         source: '/* hi */ let x = 1',
@@ -217,8 +217,8 @@ const COMMENTS: Case[] = [
     },
     {
         source: '{ a = 1; // c\n b = 2 }',
-        printed: '{\n  a = 1;\n  // c\n  b = 2\n}\n',
-        why: 'a comment inside a record forces the record open, and gets a line of its own',
+        printed: '{\n  a = 1; // c\n  b = 2\n}\n',
+        why: 'a comment inside a record forces the record open, and keeps the line the author gave it',
     },
 ];
 

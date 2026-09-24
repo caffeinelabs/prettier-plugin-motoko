@@ -291,8 +291,49 @@ export function hasBlankLine(node: NormalBranch): boolean {
  *
  * `willBreak` is called with the *left* item's doc because the question is whether the left item
  * already contains a hard break; a hard break to its right does not affect this seam.
+ *
+ * ## The comment-on-the-other-side case
+ *
+ * A `left` that does not break is not the only case where this seam has to be glued. `{ a = 1; // c`
+ * newline `b = 2 }` has a left item (`a = 1`) that flattens perfectly well, and yet a `line` here is
+ * still wrong: the group would flatten, the `;` would land on `a = 1`'s line, and the comment — which
+ * *is* the next item and does break — would be pushed to start a line of its own. The comment is
+ * attached to `a = 1` in the source and in `moc`'s tree (the three spellings of `a = 1; // c` /
+ * `a = 1 // c;` / `a = 1;` newline `// c` all produce the same AST, `.probe/_trail3.mts`), and 0.13
+ * kept it there; detaching it is churn the style does not ask for.
+ *
+ * So the caller passes what it knows about the *right* side — whether the item after this seam is a
+ * comment, and whether the source put it on the left item's own line — and a matching right side
+ * keeps the comment at the end of `a = 1;` where it started.
+ *
+ * The gate is on **any** comment, not just a line one, and the *gap* is what decides the attachment:
+ * a block comment does not run to the newline, so it is not the swallow hazard a `//` is, but the
+ * question here is only where the source put it. A "no newline in the gap" test is exactly that
+ * question — a right-side comment the source wrote on its own line already comes out right through
+ * rules 1-3, so gating on the source's own layout means this rule can only restore a shape the
+ * source had, never invent one. It also composes with the forced break a comment gives its group
+ * anyway: both spellings of the same record print identically, which is what idempotence requires.
+ *
+ * ## Why the answer is a space and not a `line`
+ *
+ * A `line` is what would normally spell "space when flat, newline when broken", so it is the obvious
+ * choice and it is the one that fails — silently, and in the opposite direction from the bug. The
+ * comment's own `breakParent` guarantees the group breaks, and Prettier's line writer takes the
+ * *last* `line` before a hard break as the line that breaks: so a `line` here emits the newline the
+ * rule was written to avoid, and the comment detaches anyway. A literal `' '` is not breakable, so
+ * nothing in the seam can break, and the comment stays put. `.probe/_trail3.mts` is the measurement,
+ * and the first attempt at this fix was the `line` spelled as `hardline` — same detachment, because
+ * both are breakable.
+ *
+ * The trailing-separator caller passes `false` for the right side, because nothing follows the last
+ * item; see `trailingSeparator`'s note on why that is a `hardline` there instead.
  */
-export function separatorLine(left: Doc, gap: string | null): Doc {
+export function separatorLine(
+    left: Doc,
+    gap: string | null,
+    nextIsComment = false,
+): Doc {
+    if (nextIsComment && (gap === null || !gap.includes('\n'))) return ' ';
     if (left !== '' && willBreak(left)) return hardline;
     if (gap !== null && gap.length - gap.replaceAll('\n', '').length >= 2) {
         return [hardline, hardline];
@@ -407,10 +448,12 @@ export function betweenSeparator(
     left: Doc,
     gap: string | null,
     leftIsLineComment = false,
+    rightIsComment = false,
 ): Doc {
     const sep = separatorChar(family);
-    if (leftIsLineComment) return [hardline, sep, separatorLine(left, gap)];
-    return [sep, separatorLine(left, gap)];
+    if (leftIsLineComment)
+        return [hardline, sep, separatorLine(left, gap, rightIsComment)];
+    return [sep, separatorLine(left, gap, rightIsComment)];
 }
 
 /**

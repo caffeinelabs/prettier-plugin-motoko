@@ -285,10 +285,24 @@ const CASES = new Map<number, readonly Case[]>([
         8,
         [
             {
+                // §4.1: the comment *is* the glue, so it stays on the last item's line and the `>` is
+                // glued to it. Moving the comment onto its own line re-lexes the `>` as `GTOP` and
+                // reintroduces the `M0001` the whole item exists to prevent, so the comment's own
+                // attachment is what survives — and that attachment is what the source wrote.
                 source: 'type F<Alpha, Beta /*c*/> = Alpha;',
+                printed: 'type F<\n  Alpha,\n  Beta /*c*/> = Alpha;\n',
+                width: 20,
+                why: '§4.1: a comment in the glued angle seam is the glue itself — a whitespace gap before `>` is rejected by moc even with the comment present, so the comment may not be moved onto its own line; it doubles as an `L8` case, and fails if the close is not glued',
+            },
+            {
+                // The pair that makes the case above a rule about *attachment* rather than about the
+                // comment's presence: the same list written with the comment on its own line keeps it
+                // there. Neither spelling is invented — `preserve` reproduces which one the author
+                // wrote, which is the only answer that does not move a comment the source placed.
+                source: 'type F<Alpha, Beta\n  /*c*/> = Alpha;',
                 printed: 'type F<\n  Alpha,\n  Beta\n  /*c*/> = Alpha;\n',
                 width: 20,
-                why: '§4: a comment in the glued angle seam is a conflict — `/*c*/>` is the only spelling both generations accept (a whitespace gap before `>` is rejected even with the comment present), so the comment may not be moved onto its own line; it doubles as an `L8` case, and fails if the close is not glued',
+                why: '§4.1 pair: an own-line comment stays on its own line, so the case above is asserting attachment and not merely the comment existing',
             },
         ],
     ],

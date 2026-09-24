@@ -25,13 +25,35 @@
  * ordering: for a comment, the break goes **first** and the separator **after** it, which is the only
  * spelling that ends the comment before the separator.
  *
+ * ## The comment stays on the line the author put it on
+ *
+ * Ordering alone leaves one more question — where the comment itself goes — and the answer is the
+ * source's. A comment the source wrote at the end of `a`'s line (`a // c`) stays there, and the
+ * separator leads the next line; a comment the source wrote on a line of its own is left there. That
+ * is what `docs/style.md`'s fence shows (`a = 1; // first` stays glued) and what 0.13.0 did: a
+ * trailing comment is *attached* to the item before it, and detaching it is churn the style does not
+ * ask for. So the seam checks the comment's own gap — no newline before it means the source wrote it
+ * on the previous item's line — and glues rather than breaks when that is what the source did.
+ *
+ * The two are independent, which is why both are pinned below: the *separator's* place follows from
+ * the comment being an item that would swallow it, and the *comment's* place follows from the source.
+ * A block comment is forced open by its `breakParent` like any other, so the fixture's `block` case
+ * breaks the list too — that is the group rule, not the separator rule.
+ *
  * ## Why a line-leading separator is not a hack
  *
  * `,` and `;` on a line of their own are ordinary Motoko, and the corpus writes them —
  * `../motoko/test/repl/lib/type-lub.mo` leads seven lines with `,`. moc accepts both spellings, and
- * the outputs below are checked against it rather than assumed (`.probe/_cfitems.mts` records the
- * three target forms parsing with 0 syntax errors, measured with `/tmp/moctar/moc -dp` and grepped
- * for `syntax error`, because moc's exit code is unreliable and reports 0 for both).
+ * the outputs below are checked against it rather than assumed: each is printed, written to a file,
+ * and fed to `/tmp/moctar/moc -dp` (`.probe/_moccheck.mts`), whose report is grepped for
+ * `syntax error` — **not** read from its exit code. The distinction is load-bearing here and was got
+ * wrong once: these cases are fragments, so moc fails name resolution on them and exits 1 whether or
+ * not the separator is spelled right. ON THE INPUT the fix replaced — the comma inside the comment,
+ * `f(\n  a // c,\n  b\n)` — moc reports **zero syntax errors too**, and exits 1 for the same
+ * name-resolution reason. That is exactly why this bug needed no compiler to find and is a guard
+ * catch rather than a moc catch: the mis-spelling parses, it just means a different tree, so
+ * `verify.ts`'s re-parse comparison is the only thing that can see it. The grep is what separates
+ * "accepted" from "accepted as something else".
  *
  * ## The cases are the three sites the rule reaches
  *
@@ -46,7 +68,7 @@
 
 // A comment as a non-last item, with the source's comma after it. The ordinary case, and the one the
 // old code got wrong most visibly: the list is forced broken by the comment, so the separator has to
-// lead its own line.
+// lead its own line. The comment itself stays on `a`'s line, because that is where the source put it.
 let parExp = f(
     a // c
     ,
@@ -95,12 +117,25 @@ let angleSeam = L.make<
     B
 >();
 
-// A block comment is NOT the same case and must not move. It ends at its own delimiter rather than at
-// the newline, so a separator after it is already outside it and the ordinary `left, then break`
-// order is correct. This pair with the first case is the point of the rule being `isLineComment`
-// rather than a `willBreak` test on the doc: `willBreak` is also true for an item that merely
-// *contains* a comment, and moving the separator for one of those would detach the comma from its own
-// item — a rewrite the guard would catch, and worse output than the bug it fixed.
+// The attachment rule on its own, with no separator in the seam to confuse it. The two declarations
+// differ only in where the author wrote the comment, and the printer reproduces that difference rather
+// than picking one: `preserve`'s job is to change layout, not to move a comment the source placed.
+// `angle-lists.mo` pins the same pair one item later, in the `closeGlued` seam.
+let attachedComment = f(a, b // trailing
+);
+let ownLineComment = f(
+    a,
+    // own line
+    b
+);
+
+// A block comment takes the other branch of the *attachment* rule and the same branch of the group
+// rule. Its `breakParent` forces the list open exactly as a line comment's does — the group rule does
+// not care which comment kind it is — but it stays glued to `a`, because that is where the source
+// wrote it, and the separator after it is already outside the comment. This pair with the first case
+// is the point of the rule keying on the comment's *kind*: `willBreak` is also true for an item that
+// merely *contains* a comment, and moving the separator for one of those would detach the comma from
+// its own item — a rewrite the guard would catch, and worse output than the bug it fixed.
 let blockCommentUnaffected = f(
     a /* c */
     ,

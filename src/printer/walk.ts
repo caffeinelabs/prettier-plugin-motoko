@@ -248,6 +248,10 @@ function listItemsDoc(
         }
 
         const next = items[i + 1];
+        // Both branches hand `separatorLine` the *right* side as well as the left, because the
+        // attachment rule needs it and only the caller has it: a comment the source wrote on this
+        // item's own line must stay on it. `next.gap` is the source's layout, and it is what says
+        // whether "on this item's own line" is what the source did.
         if (item.separated) {
             out.push(
                 betweenSeparator(
@@ -255,10 +259,11 @@ function listItemsDoc(
                     printed,
                     next.gap,
                     isLineComment(item.node),
+                    isComment(next.node),
                 ),
             );
         } else {
-            out.push(separatorLine(printed, next.gap));
+            out.push(separatorLine(printed, next.gap, isComment(next.node)));
         }
     }
 
@@ -322,7 +327,6 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
         out.push(itemDoc(item, items, i, ctx));
 
         const isLast = i === items.length - 1;
-        const next = isLast ? null : items[i + 1];
 
         // The source's own separator, and nothing else. A file is a `semi_sep` list like any other,
         // so `trailingSeparator`'s rule applies unchanged: the guard compares token texts, so an
@@ -342,13 +346,36 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
         );
 
         if (isLast) continue;
-        out.push(blankIn(next?.gap ?? null) ? [hardline, hardline] : hardline);
+        out.push(declarationBreak(items[i + 1]));
     }
 
     // The one hardline the file does not get from its own source. See the header: the source's tail
     // gap cannot survive `literalline`'s trim, so this is emitted rather than reproduced.
     out.push(hardline);
     return out;
+}
+
+/**
+ * The break between two declarations in a file: the source's blank line if it had one, otherwise one
+ * newline — unless a comment followed on the same line, which the seam must then stay on.
+ *
+ * A declaration list is always broken, so this is normally the `hardline` the paragraph above
+ * describes. It is not a `separatorLine` call, and deliberately so: that function's answer is a soft
+ * `line` in the ordinary case, which a flat group would collapse into a space and run two
+ * declarations together. A file has no group around it, so a soft `line` here would print
+ * `let a = 1 let b = 2`.
+ *
+ * The exception is the same one `separatorLine` documents, and it is checked here rather than
+ * delegated for that reason. `let o = 1; // c` newline `let p = 2` puts the comment at the end of
+ * the first declaration's line, and the source's blank-line rule cannot speak to it: the comment is
+ * *between* the declarations, so it is `next`, and its own `breakParent` supplies the break before
+ * `let p`. All this seam owes is the space that keeps the comment off its own line.
+ */
+function declarationBreak(next: ListItem): Doc {
+    const commentOnThisLine =
+        isComment(next.node) && (next.gap === null || !next.gap.includes('\n'));
+    if (commentOnThisLine) return ' ';
+    return blankIn(next.gap) ? [hardline, hardline] : hardline;
 }
 
 /**

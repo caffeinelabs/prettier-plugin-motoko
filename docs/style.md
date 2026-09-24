@@ -615,17 +615,60 @@ let o = {
                  , b);
     // after
     let g = call(
-      a
-      // c
+      a // c
       ,
       b
     );
     ```
 
-- Comment attachment follows Prettier's model. The tree-sitter parser's tree is
-  flattened to plain objects and the comments are hoisted into `ast.comments`;
-  Prettier attaches them. `prettier-ignore` is handled by the standard
-  mechanism.
+    Note what did _not_ move in that example: the comment. It stays on `a`'s line,
+    where the author wrote it, and only the separator leads the following line.
+    Ordering the separator is the correctness rule; placing the comment is a
+    separate question, below.
+
+- **A comment keeps the line the source gave it.** A comment the source wrote at
+  the end of an item's line stays attached to that item, and its group still
+  breaks. This is Prettier's own attachment model, and it is also what the
+  0.13.0 engine did, so detaching a trailing comment would be churn the style
+  does not ask for. The rule reads the _comment's own_ preceding whitespace: no
+  newline before it means the source wrote it on the previous item's line.
+
+    ```motoko no-repl
+    // before — the comment is attached to `a`
+    let g = call(a, // c
+                 b);
+    // after — the group breaks, and the comment stays on `a`'s line
+    let g = call(
+      a, // c
+      b
+    );
+    ```
+
+    A comment written on a line of its own is equally preserved where it is. The
+    two spellings are different layouts and the printer reproduces which one it
+    was given rather than choosing one; `tests/format/comments/separator-seams.mo`
+    pins the pair.
+
+- The angle close is the **one seam where a comment is not a conflict.** Because
+  moc rejects a `>` with whitespace on both sides, the close must stay glued to
+  the last item — but a comment is not whitespace to that lexer rule, so a
+  comment immediately before the close holds it in place. The comment is
+  therefore _not_ hoisted out of the seam: it stays where the source put it, and
+  the close stays glued to it. See [adjacency.md §4.1](adjacency.md) for the
+  measurements, and `tests/adjacency.test.ts` item 8 for the pair.
+
+- Comment attachment is **the walk's**, not Prettier's. The plugin registers no
+  `canAttachComment`/`printComment`, so Prettier's attachment pass is inert;
+  comments are ordinary children of the node they sit in, in source order,
+  already interleaved correctly by the CST, and the rule above reads their
+  _own_ preceding whitespace rather than an attachment Prettier computed. The
+  alternative — hoisting them into `ast.comments` for Prettier to re-attach —
+  would make the source's own placement advisory rather than reproduced, which
+  is exactly the churn the rule above exists to avoid.
+
+    This means `prettier-ignore` is **not** the standard mechanism either: there is
+    no attachment to hang the ignore on, so the printer recognises the directive
+    itself and prints the next node verbatim.
 
 ## Literals
 
