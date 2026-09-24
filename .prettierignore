@@ -20,6 +20,7 @@ package-lock.json
 # format:check` gates CI, so a generated file that churns per run must not be able to fail it.
 /tools/corpus/report.json
 /tools/corpus/RESULTS.md
+/tools/corpus/CHURN.md
 
 # Machine-generated zero-width character table (~1.5k lines, reformatting it is pure churn)
 src/utils/removeZeroWidthCharacters.json
