@@ -99,6 +99,49 @@ function tokenOf(child: NormalChild): NormalToken | null {
 }
 
 /**
+ * The text of the first non-`Text` leaf token under `node`, in source order, or `null` when it has none.
+ *
+ * Only the leading token is ever wanted (see `beginsWithImportKeyword`), so this descends rather than
+ * walking the whole subtree.
+ */
+function leadingTokenText(node: NormalChild): string | null {
+    let current: NormalChild = node;
+    while (current.nodeType === 'Branch') {
+        const first = current.children.find((c) => c.nodeType !== 'Text');
+        if (first === undefined) return null;
+        current = first;
+    }
+    return current.text;
+}
+
+/**
+ * Whether a node that is *not* an `import` branch nonetheless begins with the `import` keyword.
+ *
+ * This exists for one measured shape. A statement missing its `;` before another `import` is not parsed
+ * as an import at all: the grammar accepts `import` as an ordinary identifier in expression position, so
+ *
+ *     import Array "mo:base/Array"      // no `;`
+ *     import Text "mo:base/Text";
+ *
+ * parses as an import followed by a **call expression** `import(Text)("mo:base/Text")`:
+ *
+ *     Branch(exp_dec) "import Text \"mo:base/Text\""
+ *       Branch(call_exp)
+ *         Branch(call_exp)
+ *           Branch(var_exp) -> Token("import")
+ *
+ * `isImport` is `kind === 'import'` and is right to reject that node. `readSection` must not simply
+ * break on it: breaking ends the section one import early, the remaining imports land in `tail`, and
+ * `organizeImportSection` re-spaces `tail` — so the pass rewrites a section it read incompletely and
+ * its own output is not a fixed point. This was the only `not idempotent` entry in the 323-case legacy
+ * ledger. moc rejects the shape outright (`unexpected token 'import'`), so refusing to touch the file —
+ * rather than inventing the missing `;` — is both the safe direction and the honest one.
+ */
+function beginsWithImportKeyword(node: NormalChild): boolean {
+    return leadingTokenText(node) === 'import';
+}
+
+/**
  * Read one `import` branch into an `ImportClause`, or `null` when it is not a shape this pass knows.
  *
  * Written as a total function over *observed* shapes rather than a grammar walk. The three children
@@ -294,6 +337,13 @@ function readSection(root: NormalBranch): Section | null {
             end = i;
             continue;
         }
+
+        // A node that begins with `import` but is not an `import` branch is a statement whose `;` is
+        // missing: the grammar parses it as a call expression over the identifier `import`, so it looks
+        // like a continuation of the section while `isImport` correctly rejects it. Refuse the whole
+        // file rather than ending the section here — ending early leaves these imports in `tail`, which
+        // gets re-spaced, and the pass stops being a fixed point. See `beginsWithImportKeyword`.
+        if (beginsWithImportKeyword(item)) return null;
 
         break; // the section ends at the first real declaration
     }
