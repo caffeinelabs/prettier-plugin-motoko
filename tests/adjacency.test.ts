@@ -307,6 +307,19 @@ const CASES = new Map<number, readonly Case[]>([
                 width: WIDE,
                 why: '`S5`: same for the tight `#` variant seam',
             },
+            {
+                // The reason this seam matters more than the others: a tight `#` is a variant tag and
+                // a spaced `#` is concatenation, so re-spacing it is a role change and not a layout
+                // change. The chain printer normalises operator spacing now that it accepts levels
+                // with no gap child (`.probe/_gapshape.mts`), and this case is what pins that the
+                // normalisation stops at `#`. `mayTrail` is the mechanism: `#` may not trail a line,
+                // so `planChain` refuses the whole chain and the source-gap printer keeps it.
+                source: 'func f() { let x = aaaaaaaabbbbbbbb#ccccccccdddddddd }',
+                printed:
+                    'func f() {\n  let x = aaaaaaaabbbbbbbb#ccccccccdddddddd\n}\n',
+                width: 12,
+                why: '`S5`: a tight `#` is a variant tag, so normalising it to `a # b` would change the program — the chain printer refuses and the seam survives a width that forces a break',
+            },
         ],
     ],
 ]);

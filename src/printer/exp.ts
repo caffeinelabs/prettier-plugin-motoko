@@ -156,13 +156,79 @@ interface Chain {
 }
 
 /**
+ * The three meaningful parts of one operator level — `operand`, the operator node, `operand` — or
+ * `null` if the level holds anything this walk does not understand.
+ *
+ * ## Why this is not a fixed-length destructure
+ *
+ * The CST **omits a gap when the source had no whitespace there**, so one chain arrives with a
+ * different child count depending on how it was spelled. Measured with `.probe/_gapshape.mts` and
+ * `.probe/_coalgap.mts`:
+ *
+ * | source      | children | node kinds                       |
+ * | ----------- | -------- | -------------------------------- |
+ * | `1 + 1`     | 5        | operand, Text, op, Text, operand |
+ * | `1 +1`      | 4        | operand, Text, op, operand       |
+ * | `1+ 1`      | 4        | operand, op, Text, operand       |
+ * | `1+1`       | 3        | operand, op, operand             |
+ * | `a ?? b`    | 4        | operand, Text, op, operand       |
+ * | `a?? b`     | 3        | operand, op, operand             |
+ *
+ * The first draft required the full form (`5` for `bin_exp`, `4` for `coalesce_exp`) and returned
+ * `null` for the rest, so a glued `1+1` fell through to the source-gap printer — which reproduces
+ * the source's *spaces*, and there are none to reproduce. The output stayed `1+1`: neither module
+ * normalised operator spacing for any chain the author had typed without it. Nothing could see
+ * that. The guard compares token texts and `shapeOf` drops `Text` nodes entirely, so `1+1` and
+ * `1 + 1` are the **same shape** — the measured trees differ in child *count* and agree in
+ * spelling — and the difference is invisible to every gate. It surfaced only by replaying the 0.13
+ * suite (`.probe/_legacyreplay.mts`), where full-width chain cases read `in: "1+1" / exp: "1 + 1\n"`.
+ *
+ * Accepting the short forms is what routes those chains to the flat rendering, which re-emits the
+ * operator with canonical spacing. That is the normalisation the plan's invariant licenses —
+ * "whitespace normalises only where both lexers agree" — and here both lexers agree because the
+ * *tree* is identical; only the spelling differed.
+ *
+ * ## Why a gap must still be `Text`, and what rejects a comment
+ *
+ * A **comment** in a gap position is a real child — a `Token` `line_comment` or a `Branch`
+ * `block_comment`, never a `Text` (measured in the same probes). Flattening would drop it, which
+ * changes the program's text, so a level carrying one is still refused and the whole chain falls
+ * back to the source-gap printer. The `Text` filter below is what does that work: a comment stays
+ * in `parts`, so the three-part length check fails.
+ *
+ * Both walks share this because the hazard is the same one; they part company one line later, on
+ * what the operator node *is* — a `Branch` for `bin_exp`, a bare `Token` for `coalesce_exp` — and
+ * each caller validates its own, so that difference never has to be encoded here.
+ *
+ * Policy is deliberately *not* applied here — `mayTrail` and the sub-chain check stay in
+ * `planChain`, so this function answers only "what are the parts", not "may this be printed".
+ */
+function threeParts(
+    level: NormalBranch,
+): { left: NormalChild; opNode: NormalChild; right: NormalChild } | null {
+    const children = level.children;
+    // A level is 3, 4 or 5 children. Anything larger holds something this walk does not understand.
+    if (children.length < 3 || children.length > 5) return null;
+
+    // Dropping the whitespace leaves exactly the three meaningful parts. Two consequences worth
+    // naming: an absent gap is not an error (it is a spelling, not a malformed tree), and a comment
+    // is *not* dropped (it is a Token or Branch), so it survives to break the length check.
+    const parts = children.filter((c) => c.nodeType !== 'Text');
+    if (parts.length !== 3) return null;
+
+    const [left, opNode, right] = parts;
+    return { left, opNode, right };
+}
+
+/**
  * Flatten a `bin_exp` spine into a flat chain, or `null` if any level has an unexpected shape.
  *
  * The grammar is left-associative with **no precedence**, so `a + b * c - d` is a spine of `bin_exp`
- * nodes leaning left and the flattening is a walk down `children[0]`. Each level must be exactly
- * `[left, Text, op, Text, right]`; anything else — a comment in place of a gap, an operator holding
- * more than its token — returns `null`, because the safe answer to "I do not recognise this" is to
- * print it exactly as the source had it.
+ * nodes leaning left and the flattening is a walk down `children[0]`. `threeParts` does the
+ * per-level shape check and carries the argument for why a level may have 3, 4 or 5 children; what
+ * is left here is the walk and the policy. Any level it refuses — a comment in place of a gap, an
+ * operator holding more than its token — takes the whole chain with it, because the safe answer to
+ * "I do not recognise this" is to print it exactly as the source had it.
  *
  * Depth is bounded by the expression, which is bounded by the file, so no explicit limit is needed;
  * the recursion is the same one the watcher in `normalize.ts` already walks.
@@ -175,13 +241,10 @@ function planChain(node: NormalBranch): Chain | null {
 
     let current: NormalBranch = node;
     for (;;) {
-        const children = current.children;
-        // The expected level: operand, gap, operator, gap, operand.
-        if (children.length !== 5) return null;
-        const [left, g1, opNode, g2, right] = children;
-        // The gaps must be plain whitespace. A comment here is the case the header describes: the
-        // text would be dropped by flattening, so this chain is not one this module may touch.
-        if (g1.nodeType !== 'Text' || g2.nodeType !== 'Text') return null;
+        const level = threeParts(current);
+        if (level === null) return null;
+        const { left, opNode, right } = level;
+
         const op = opText(opNode);
         if (op === null) return null;
         // An operator that may not end a line takes the whole chain with it — see `mayTrail`. This is
@@ -244,8 +307,10 @@ function planChain(node: NormalBranch): Chain | null {
  *    levels, which lean left. So the walk descends the **right** operand, where `planChain` descends
  *    the left — and that in turn is why this walk *appends* its operands where `planChain` prepends:
  *    a left-leaning walk meets its operands back to front, a right-leaning one meets them in order.
- *  - **The node has four children, not five**, and the operator is a bare `Token` rather than a
- *    `Branch` wrapping one: `[left, Text, op, right]`.
+ *  - **The operator is a bare `Token`, not a `Branch` wrapping one.** The gap rule is the shared
+ *    one — see `threeParts` — and `a?? b` measurably arrives as a 3-child level with no gap at all
+ *    (`.probe/_coalgap.mts`), which is the same omission the binary walk had to learn. What is
+ *    checked here is only the part `threeParts` cannot know: that the operator really is `??`.
  *
  * ## The trailing space in the operator token, which is the whole hazard
  *
@@ -278,18 +343,15 @@ function planCoalesce(node: NormalBranch): Chain | null {
 
     let current: NormalBranch = node;
     for (;;) {
-        const children = current.children;
-        // The expected level: operand, gap, operator, operand — four children, no gap after the
-        // operator, because the operator's own token text carries the trailing space.
-        if (children.length !== 4) return null;
-        const [left, gap, opNode, right] = children;
-        // The gap must be plain whitespace. A comment here is `planChain`'s case for the same
-        // reason: flattening would drop the text, so this is not a chain the module may touch.
-        if (gap.nodeType !== 'Text') return null;
-        // The operator is a **bare `Token`**, not a `Branch` wrapping one — the one place this walk
-        // parts company with `opText`, which requires `nodeType === 'Branch'` and so reports `null`
-        // here. Measured with `.probe/_coalshape.mts`; a `bin_exp` level by contrast holds
-        // `Branch bin_op → Token "+"`.
+        const level = threeParts(current);
+        if (level === null) return null;
+        const { left, opNode, right } = level;
+
+        // The one thing `threeParts` cannot check, because it does not know which operator this walk
+        // wants: the node must be a **bare `Token`** spelled `??`. A `bin_exp` level by contrast
+        // holds `Branch bin_op → Token "+"`, and `opText` requires that Branch, which is exactly why
+        // this walk cannot reuse `opText` and reads the token itself. Measured with
+        // `.probe/_coalshape.mts`.
         if (opNode.nodeType !== 'Token') return null;
         if (opNode.text.trim() !== COALESCE_OP) return null;
 

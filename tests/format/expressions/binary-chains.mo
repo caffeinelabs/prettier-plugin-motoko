@@ -43,3 +43,44 @@ let concatStaysLong = alphaBetaGammaDelta # deltaEpsilonZetaEta # thetaIotaKappa
 
 // §2.7: a shift is one token, so it never trails a line either — same refusal, same reason.
 let shiftStaysLong = aaaaaaaabbbbbbbb >> ccccccccdddddddd;
+
+/**
+ * Spacing the author omitted, which the printer normalises.
+ *
+ * The CST **omits a gap when the source had no whitespace there**, so one tree arrives with three,
+ * four or five children depending on how it was spelled — `1+1`, `1 +1`, `1+ 1`, `1 + 1`. Measured
+ * with `.probe/_gapshape.mts`:
+ *
+ * | source  | children | node kinds                       |
+ * | ------- | -------- | -------------------------------- |
+ * | `1 + 1` | 5        | operand, Text, op, Text, operand |
+ * | `1 +1`  | 4        | operand, Text, op, operand       |
+ * | `1+ 1`  | 4        | operand, op, Text, operand       |
+ * | `1+1`   | 3        | operand, op, operand             |
+ *
+ * This walk originally required exactly five and refused the rest, so a glued `1+1` fell through to
+ * the source-gap printer. That printer reproduces the source's spaces, and there were none — so the
+ * output stayed `1+1` and the printer never normalised operator spacing at all. **No gate could see
+ * it**: the guard compares token texts, and `shapeOf` drops `Text` nodes, so the four spellings above
+ * are one shape. It surfaced by replaying the 0.13 suite (`.probe/_legacyreplay.mts`), where the
+ * full-width chain cases read `in: "1+1" / exp: "1 + 1\n"` — 19 of them went DIFF → PASS once the
+ * short forms were accepted.
+ *
+ * A **comment** in a gap position is still refused: it is a `Token` or a `Branch`, never a `Text`, so
+ * it survives the filter that strips whitespace and breaks the three-part check. The chain then falls
+ * back and keeps the comment *and* the source's own spacing, which is why `withComment` above is
+ * unchanged by this fix.
+ */
+
+let glued = 1+1;
+
+let gluedLeft = 1 +1;
+
+let gluedRight = 1+ 1;
+
+let gluedRel = a==b;
+
+// Mixed spellings in one chain, and long enough that the printed form breaks — the break lands after
+// the canonical `+`, on a chain whose source had no space around any of them.
+let gluedChain = aaaaaaaabbbbbbbb+ccccccccdddddddd+eeeeeeeeffffffff+gggggggghhhhhhhh;
+

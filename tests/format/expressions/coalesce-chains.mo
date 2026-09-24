@@ -38,6 +38,17 @@ let longChain = aaaaaaaaaaaaaaa ?? bbbbbbbbbbbbbbb ?? ccccccccccccccc ?? ddddddd
 // where a one-operator chain stayed over `printWidth` until the two-operator minimum was removed.
 let singleOperator = proposal_submission_deposit_e8s ?? system_params_reserve_e8s_plus_more;
 
+// No space before the operator. The lexer is `alias(token(/\?\?[ \t\r\n]/), "??")`, so the
+// whitespace *after* `??` is inside the token and mandatory — but nothing requires any *before* it,
+// and the CST omits that gap when the author did. Measured with `.probe/_coalgap.mts`: `a ?? b` is a
+// four-child level, `a?? b` is a **three-child** one, and the two have identical shapes because the
+// operator token reads `"?? "` either way. This walk required the four-child form and so fell
+// through to the source-gap printer, exactly as the binary walk did — `binary-chains.mo` carries the
+// long-form argument, including why no gate can see the difference.
+let glued = a?? b;
+
+let gluedChain = aaaaaaaabbbbbbbbbb?? ccccccccccdddddddddd?? eeeeeeeeeeffffffffff;
+
 // A `??` whose operands are themselves calls that break — the operands' own groups are independent
 // of the chain's, so each breaks on its own width and the `??` only breaks when the chain does not fit.
 let callOperands = someVeryLongFunctionName(argumentOne, argumentTwo) ?? someOtherLongFunction(argumentThree, argumentFour);
