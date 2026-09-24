@@ -48,6 +48,7 @@ import type {
     NormalNode,
 } from '../parser/normalize.ts';
 import { verifyOutput } from '../verify.ts';
+import { binaryChainDoc } from './exp.ts';
 import {
     betweenSeparator,
     hasBlankLine,
@@ -142,6 +143,13 @@ function nodeDoc(node: NormalChild, ctx: WalkOptions): Doc {
 
     const list = listOf(node);
     if (list) return listDoc(node, list, ctx);
+    // Area printers, ahead of the source-gap fallback. Each returns `null` for a node it does not
+    // own, so the fallback stays as wide as possible and a node nothing understands is still printed
+    // byte-exactly. See `planChain`'s note on why refusing is the safe direction.
+    const chain = binaryChainDoc(node as NormalBranch, (child) =>
+        nodeDoc(child, ctx),
+    );
+    if (chain !== null) return chain;
     return branchDoc(node, ctx);
 }
 
