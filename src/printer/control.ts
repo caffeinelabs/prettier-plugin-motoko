@@ -2,8 +2,9 @@ import { doc } from 'prettier';
 import type { Doc } from 'prettier';
 
 import type { NormalBranch, NormalChild } from '../parser/normalize.ts';
+import { isComment } from './parts.ts';
 
-const { group, indent, line } = doc.builders;
+const { hardline, indent } = doc.builders;
 
 const CONTROL_KINDS = new Set(['switch_exp']);
 
@@ -31,40 +32,59 @@ function switchDoc(
     const close = children[children.length - 1];
     if (close.nodeType !== 'Token' || close.text !== '}') return null;
 
-    const arms: Doc[] = [];
+    const run: Doc[] = [];
+    let gap: string | null = null;
     for (const child of children.slice(5, -1)) {
-        if (child.nodeType === 'Text') continue;
-
+        if (child.nodeType === 'Text') {
+            gap = child.text;
+            continue;
+        }
         if (child.nodeType === 'Token' && child.text === ';') {
-            if (arms.length === 0) return null;
-            arms[arms.length - 1] = [arms[arms.length - 1], ';'];
+            if (run.length === 0) return null;
+            run.push(';');
+            gap = null;
             continue;
         }
 
-        if (child.nodeType !== 'Branch') return null;
-        const arm = armDoc(child as NormalBranch, print);
-        if (arm === null) return null;
-        arms.push(arm);
+        let item: Doc;
+        if (isComment(child)) {
+            item = print(child);
+        } else {
+            if (child.nodeType !== 'Branch') return null;
+            const arm = armDoc(child as NormalBranch, print);
+            if (arm === null) return null;
+            item = arm;
+        }
+        if (run.length > 0) run.push(separator(gap));
+        run.push(item);
+        gap = null;
     }
 
-    if (arms.length === 0) return null;
+    if (run.length === 0) return null;
 
-    const run: Doc[] = [];
-    for (let i = 0; i < arms.length; i += 1) {
-        if (i > 0) run.push(line);
-        run.push(arms[i]);
-    }
+    const broken = children.some(
+        (c) => c.nodeType === 'Text' && c.text.includes('\n'),
+    );
+    const head = [keyword.text, ' ', print(scrutinee), ' ', open.text];
+    const afterOpen = children[5];
+    const beforeClose = children[children.length - 2];
+    const blank = (c: NormalChild | undefined) =>
+        c?.nodeType === 'Text' && c.text.split('\n').length > 2 ? hardline : '';
+    return broken
+        ? [
+              head,
+              indent([hardline, blank(afterOpen), run]),
+              blank(beforeClose),
+              hardline,
+              close.text,
+          ]
+        : [head, ' ', run, ' ', close.text];
+}
 
-    return group([
-        keyword.text,
-        ' ',
-        print(scrutinee),
-        ' ',
-        open.text,
-        indent([line, run]),
-        line,
-        close.text,
-    ]);
+function separator(gap: string | null): Doc {
+    if (gap === null || !gap.includes('\n')) return ' ';
+    const newlines = gap.length - gap.replaceAll('\n', '').length;
+    return newlines >= 2 ? [hardline, hardline] : hardline;
 }
 
 function armDoc(
@@ -81,9 +101,9 @@ function armDoc(
         return null;
 
     const printedBody = print(body);
-    const rest: Doc[] = doc.utils.canBreak(printedBody)
-        ? [' ', printedBody]
-        : [indent([line, printedBody])];
+    const rest: Doc[] = gap2.text.includes('\n')
+        ? [indent([hardline, printedBody])]
+        : [' ', printedBody];
 
-    return group([keyword.text, ' ', print(pattern), ...rest]);
+    return [keyword.text, ' ', print(pattern), ...rest];
 }

@@ -77,11 +77,6 @@ export function comparisonOp(op: string): Doc {
     return [line, op, line];
 }
 
-// tree-sitter's `??` token is `/\?\?[ \t\r\n]/`, so it needs its trailing space, and glued `??x` is `?(?x)`.
-export function coalesceOperator(op: string): Doc {
-    return [line, op, ' '];
-}
-
 // moc 1.1.0 reads glued `??a` as `?(?a)`, while 1.16.1 and 2.0 reject it.
 export function doubleOption(): Doc {
     return '? ?';
@@ -108,10 +103,6 @@ export function unaryOperand(op: Doc, operand: Doc): Doc {
 
 export function juxtapositionSpace(): Doc {
     return ' ';
-}
-
-export function breakAfterOperator(op: Doc): Doc {
-    return [op, line];
 }
 
 export function commentSplitsSeam(

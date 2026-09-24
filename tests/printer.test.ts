@@ -56,13 +56,13 @@ const LAYOUT: Case[] = [
     },
     {
         source: 'let r = {\n  a = 1;\n  b = 2;\n}',
-        printed: 'let r = { a = 1; b = 2; }\n',
-        why: 'a record that fits is collapsed, and the source’s trailing `;` comes with it',
+        printed: 'let r = {\n  a = 1;\n  b = 2;\n}\n',
+        why: 'a broken record stays broken, with the source’s trailing `;`',
     },
     {
         source: 'let r = {\n  a = 1\n}',
-        printed: 'let r = { a = 1 }\n',
-        why: 'a record without a trailing `;` collapses and stays without one',
+        printed: 'let r = {\n  a = 1\n}\n',
+        why: 'a broken record without a trailing `;` stays without one',
     },
     {
         source: 'func f() : Nat { let x = 1; x }',
@@ -76,7 +76,7 @@ const LAYOUT: Case[] = [
     },
     {
         source: 'import {\n  a;\n  b\n} = "mo:x"',
-        printed: 'import { a; b } = "mo:x"\n',
+        printed: 'import {\n  a;\n  b\n} = "mo:x"\n',
         why: 'an import’s braced pattern is a list, and `a; b` are two names, not a path',
     },
     {
@@ -103,39 +103,6 @@ const LAYOUT: Case[] = [
         source: 'actor Palindrome { }',
         printed: 'actor Palindrome {}\n',
         why: 'an empty object body is `{}` with no interior space',
-    },
-];
-
-const BREAKING: Case[] = [
-    {
-        source: 'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 }',
-        printed:
-            'let r = {\n  alpha = 1;\n  beta = 2;\n  gamma = 3;\n  delta = 4;\n  epsilon = 5;\n  zeta = 6;\n  eta = 7\n}\n',
-        why: 'a record past the print width breaks one field per line, indented one level',
-    },
-    {
-        source: 'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7; }',
-        printed:
-            'let r = {\n  alpha = 1;\n  beta = 2;\n  gamma = 3;\n  delta = 4;\n  epsilon = 5;\n  zeta = 6;\n  eta = 7;\n}\n',
-        why: 'the same list broken, with the source’s trailing `;` now at the end of the last line',
-    },
-    {
-        source: 'let a = [1111111, 2222222, 3333333, 4444444, 5555555, 6666666, 7777777, 8888888, 9999999]',
-        printed:
-            'let a = [\n  1111111,\n  2222222,\n  3333333,\n  4444444,\n  5555555,\n  6666666,\n  7777777,\n  8888888,\n  9999999\n]\n',
-        why: 'the array family breaks the same way, closing bracket on its own line',
-    },
-    {
-        source: 'func f(alpha : Nat, beta : Nat, gamma : Nat, delta : Nat, epsilon : Nat, zeta : Nat) : Nat { alpha }',
-        printed:
-            'func f(\n  alpha : Nat,\n  beta : Nat,\n  gamma : Nat,\n  delta : Nat,\n  epsilon : Nat,\n  zeta : Nat\n) : Nat { alpha }\n',
-        why: 'a parameter list breaks while the body beside it stays flat — lists break independently',
-    },
-    {
-        source: 'import { performanceCounter; debugPrint; other; more; evenMore; yetAnother } = "mo:x"',
-        printed:
-            'import {\n  performanceCounter;\n  debugPrint;\n  other;\n  more;\n  evenMore;\n  yetAnother\n} = "mo:x"\n',
-        why: 'a long import pattern breaks with `;` separators inside the braces',
     },
 ];
 
@@ -180,8 +147,8 @@ const BLANK_LINES: Case[] = [
     },
     {
         source: 'func f() : Nat {\n\n let x = 1;\n\n\n x\n}',
-        printed: 'func f() : Nat {\n  let x = 1;\n\n  x\n}\n',
-        why: 'a blank line *inside* a broken block is kept, while a leading one is dropped',
+        printed: 'func f() : Nat {\n\n  let x = 1;\n\n  x\n}\n',
+        why: 'blank lines inside a broken block are kept, a run collapses to one',
     },
 ];
 
@@ -189,65 +156,17 @@ const IMPORT_SECTION: Case[] = [
     {
         source: 'import A "A";\n\nactor {};\n',
         printed: 'import A "A";\n\nactor {};\n',
-        why: 'a blank line the source already had is kept as the section blank',
+        why: 'a blank line after the imports is kept',
     },
     {
-        source: 'import A "A";\nimport B "B";\n\nactor {};\n',
-        printed: 'import A "A";\nimport B "B";\n\nactor {};\n',
-        why: 'the blank goes after the last import, not after the first',
-    },
-    {
-        source: 'import A "A";\n// import B "B";\n\nactor {};\n',
-        printed: 'import A "A";\n// import B "B";\n\nactor {};\n',
-        why: 'a comment is part of the section, so the blank goes below it',
-    },
-    {
-        source: 'import A "A";\n// import B "B";\nimport { C } "C";\n\nactor {};\n',
-        printed:
-            'import A "A";\n// import B "B";\nimport { C } "C";\n\nactor {};\n',
-        why: 'a comment between two imports does not end the section',
-    },
-    {
-        source: 'import A "A"; actor {}',
-        printed: 'import A "A";\n\nactor {}\n',
-        why: 'a glued section gets a blank line invented for it — the rule is not "keep"',
-    },
-    {
-        source: 'import A "A";\n// import B "B";\nimport C "C";\nactor {};',
-        printed:
-            'import A "A";\n// import B "B";\nimport C "C";\n\nactor {};\n',
-        why: 'the invented blank still goes after the comments that trail the imports',
-    },
-    {
-        source: 'import A "A";\nimport {B} "B";\n// import C "C";\nactor A {\nabc\n};',
-        printed:
-            'import A "A";\nimport { B } "B";\n// import C "C";\n\nactor A { abc };\n',
-        why: 'a section whose comment trail ends the imports, with the list re-spaced',
-    },
-    {
-        source: 'import A "A";\nimport B "B";',
-        printed: 'import A "A";\nimport B "B";\n',
-        why: 'a file that is only imports gets no trailing blank — there is no declaration to separate',
+        source: 'import A "A";\n// note\nactor {};\n',
+        printed: 'import A "A";\n// note\nactor {};\n',
+        why: 'no blank line is invented after the imports',
     },
     {
         source: '\n\nimport A "A";\nactor {}',
-        printed: 'import A "A";\n\nactor {}\n',
-        why: 'a leading blank before the section is dropped, and the invented one still appears',
-    },
-    {
-        source: '\n\nlet x = 1;',
-        printed: 'let x = 1;\n',
-        why: 'no imports means no leading blank, invented or kept',
-    },
-    {
-        source: '/* header */\nimport A "A";\nactor {}',
-        printed: '/* header */\nimport A "A";\n\nactor {}\n',
-        why: 'a header comment above the imports is inside the section, not a declaration',
-    },
-    {
-        source: 'import A "A";\n/* c */\nactor {}',
-        printed: 'import A "A";\n/* c */\n\nactor {}\n',
-        why: 'a block comment trailing the imports is part of the section too',
+        printed: 'import A "A";\nactor {}\n',
+        why: 'a leading blank before the first import is dropped',
     },
 ];
 
@@ -284,13 +203,7 @@ const UNTOUCHED: Case[] = [
     },
 ];
 
-const ALL: Case[] = [
-    ...LAYOUT,
-    ...BREAKING,
-    ...COMMENTS,
-    ...BLANK_LINES,
-    ...UNTOUCHED,
-];
+const ALL: Case[] = [...LAYOUT, ...COMMENTS, ...BLANK_LINES, ...UNTOUCHED];
 
 describe('preserve: layout', () => {
     test.each(LAYOUT.map((c) => [c.why, c] as const))('%s', async (_why, c) => {
@@ -304,27 +217,6 @@ describe('preserve: layout', () => {
                 `guard rejected a hand-checked case: ${JSON.stringify(c.source)}`,
             ).resolves.toBe(c.printed);
         }
-    });
-});
-
-describe('preserve: breaking', () => {
-    test.each(BREAKING.map((c) => [c.why, c] as const))(
-        '%s',
-        async (_why, c) => {
-            expect(await format(c.source)).toBe(c.printed);
-        },
-    );
-
-    test('a trailing separator follows the source, not the layout', async () => {
-        const without = await format(
-            'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 }',
-        );
-        const with_ = await format(
-            'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7; }',
-        );
-        expect(without).not.toBe(with_);
-        expect(without).toMatch(/eta = 7\n}\n$/);
-        expect(with_).toMatch(/eta = 7;\n}\n$/);
     });
 });
 
@@ -363,17 +255,6 @@ describe('preserve: the import section', () => {
             expect(await format(c.source)).toBe(c.printed);
         },
     );
-
-    test('the blank lands below a comment that trails the imports', async () => {
-        const printed = await format(
-            'import A "A";\nimport B "B";\n// note\nactor {};',
-        );
-        const lines = printed.split('\n');
-        const blankAt = lines.indexOf('');
-        expect(blankAt).toBeGreaterThan(-1);
-        expect(lines[blankAt - 1]).toContain('// note');
-        expect(lines[blankAt + 1]).toContain('actor');
-    });
 });
 
 describe('preserve: untouched constructs', () => {
@@ -412,14 +293,12 @@ describe('preserve: idempotence and options', () => {
         }
     });
 
-    test('printWidth decides whether a list breaks', async () => {
-        const source = 'let r = { aaaa = 1; bbbb = 2 }';
-        expect(await format(source, { printWidth: 80 })).toBe(
-            'let r = { aaaa = 1; bbbb = 2 }\n',
-        );
-        expect(await format(source, { printWidth: 20 })).toBe(
-            'let r = {\n  aaaa = 1;\n  bbbb = 2\n}\n',
-        );
+    test('printWidth never breaks a list', async () => {
+        const source =
+            'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 }';
+        for (const printWidth of [80, 20]) {
+            expect(await format(source, { printWidth })).toBe(`${source}\n`);
+        }
     });
 });
 
@@ -441,55 +320,46 @@ describe('preserve: the angle close', () => {
     }
 
     test('a broken angle list glues the close to the last item', async () => {
-        const printed = await format('type F<Alpha, Beta, Gamma> = Alpha;', {
-            printWidth: 20,
-        });
-        expect(printed).toBe('type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;\n');
+        const source = 'type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;';
+        expect(await format(source)).toBe(`${source}\n`);
     });
 
     test('an instantiation list glues its close too', async () => {
         const printed = await format(
-            'type L = List<List<Nat>>;\nlet x = L.make<Alpha, Beta>();',
-            { printWidth: 20 },
+            'type L = List<List<Nat>>;\nlet x = L.make<\n  Alpha,\n  Beta>();',
         );
         expect(printed).toMatch(/Beta>\(\)/);
         expect(printed).not.toMatch(/\n\s*>/);
     });
 
     test('a nested close is a contiguous `>>`', async () => {
-        const printed = await format(
-            'func f<Alpha, Beta <: List<Nat>>(a : Alpha) : Beta = a;',
-            { printWidth: 20 },
-        );
-        expect(printed).toBe(
-            'func f<\n  Alpha,\n  Beta <: List<Nat>>(\n  a : Alpha\n) : Beta = a;\n',
-        );
+        const source =
+            'func f<\n  Alpha,\n  Beta <: List<Nat>>(\n  a : Alpha\n) : Beta = a;';
+        expect(await format(source)).toBe(`${source}\n`);
     });
 
     test('no printed angle list anywhere ends a line before its `>`', async () => {
         const sources = [
-            'type F<Alpha, Beta, Gamma> = Alpha;',
-            'func f<Alpha, Beta, Gamma <: List<Nat>>(a : Alpha) : Beta = a;',
-            'class C<Alpha, Beta>(a : Alpha) { public let b : Beta; };',
-            'let x = f<Alpha, Beta, Gamma>();',
+            'type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;',
+            'func f<\n  Alpha,\n  Beta,\n  Gamma <: List<Nat>>(a : Alpha) : Beta = a;',
+            'class C<\n  Alpha,\n  Beta>(a : Alpha) { public let b : Beta; };',
+            'let x = f<\n  Alpha,\n  Beta,\n  Gamma>();',
         ];
         for (const source of sources) {
             let reached = 0;
-            for (const printWidth of [80, 40, 20, 10]) {
-                const printed = await format(source, { printWidth });
-                const { root } = await parse(printed);
-                const visit = (node: NormalChild): void => {
-                    if (node.nodeType !== 'Branch') return;
-                    if (node.kind === 'typ_params' || node.kind === 'inst')
-                        reached += 1;
-                    for (const child of node.children) visit(child);
-                };
-                visit(root);
-                expect(
-                    detachedCloses(root),
-                    `detached close at printWidth ${printWidth}: ${JSON.stringify(source)}\n${printed}`,
-                ).toEqual([]);
-            }
+            const printed = await format(source);
+            const { root } = await parse(printed);
+            const visit = (node: NormalChild): void => {
+                if (node.nodeType !== 'Branch') return;
+                if (node.kind === 'typ_params' || node.kind === 'inst')
+                    reached += 1;
+                for (const child of node.children) visit(child);
+            };
+            visit(root);
+            expect(
+                detachedCloses(root),
+                `detached close: ${JSON.stringify(source)}\n${printed}`,
+            ).toEqual([]);
             expect(
                 reached,
                 `no angle list was reached, so this source proves nothing: ${JSON.stringify(source)}`,

@@ -10,7 +10,6 @@ exports[`format/comments/comment-placement.mo > prints as snapshotted 1`] = `
 
 //a
 
-
 //b
 
 {
@@ -19,11 +18,10 @@ exports[`format/comments/comment-placement.mo > prints as snapshotted 1`] = `
 
 //
 
-a<
-  (
-    b,
-    //c
-  )>();
+a<(
+  b,
+  //c
+)>();
 
 a<(b)>();
 
@@ -116,7 +114,9 @@ exports[`format/comments/prettier-ignore.mo > prints as snapshotted 1`] = `
 let rec1 = {
 abc};
 
-let rec2 = { abc };
+let rec2 = {
+  abc
+};
 
 /* prettier-ignore */
 let b1 = 2*2+2;
@@ -188,8 +188,7 @@ switch (mode) { case #up { +1 }; case #dn { -1 } };
 switch x { case (#a) 1 };
 
 switch (someLongScrutineeExpressionHere) {
-  case (#a)
-    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOmicronPiRhoSigma;
+  case (#a) alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOmicronPiRhoSigma;
   case (_) 2
 };
 
@@ -198,19 +197,12 @@ switch (x) { case (#a) 1; case (_) 2; };
 switch (x) { case (#a) 1; case (_) 2 };
 
 switch (x) {
-  case (#alphaVariant) {
-    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi1
-  };
-  case (#betaVariant) {
-    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi2
-  }
+  case (#alphaVariant) { alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi1 };
+  case (#betaVariant) { alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi2 }
 };
 
 switch (a) {
-  case (#VCon (tag, args)) switch tag {
-    case "0" b;
-    case _ { assert false; #VInt 0 }
-  };
+  case (#VCon (tag, args)) switch tag { case "0" b; case _ { assert false; #VInt 0 } };
   case _ { assert false; #VInt 0 }
 };
 "
@@ -219,14 +211,9 @@ switch (a) {
 exports[`format/expressions/angle-lists.mo > prints as snapshotted 1`] = `
 "let fitsFlat = L.make<Nat, Int>();
 
-let breaksWithCloseGlued = someLongReceiverNameHere.methodName<
-  SomeLongTypeArgumentName,
-  AnotherLongTypeArgumentName>(anArgument);
+let breaksWithCloseGlued = someLongReceiverNameHere.methodName<SomeLongTypeArgumentName, AnotherLongTypeArgumentName>(anArgument);
 
-type LongTypeParameters<
-  SomeLongTypeParameterName,
-  AnotherLongTypeParameterName,
-  AThirdLongOne> = SomeLongTypeParameterName;
+type LongTypeParameters<SomeLongTypeParameterName, AnotherLongTypeParameterName, AThirdLongOne> = SomeLongTypeParameterName;
 
 let trailingComment = L.make<
   Nat,
@@ -237,16 +224,16 @@ let middleComment = L.make<
   Nat, // c
   Int>();
 
-let blockCommentStaysGlued = L.make<
-  Nat,
-  Int /* c */>();
+let blockCommentStaysGlued = L.make<Nat, Int /* c */>();
 
 type TrailingCommentInParameters<
   A,
   B // c
 > = A;
 
-type ShortParameters<A, B> = A;
+type ShortParameters<
+  A,
+  B> = A;
 "
 `;
 
@@ -255,40 +242,25 @@ exports[`format/expressions/angle-seams.mo > prints as snapshotted 1`] = `
 let spacedBeforeAngle = id <Nat>(1);
 let inAChain = 1 + id <Nat>(2);
 let compare = 1 < 2;
-let compareBroken = 1 < 2;
+let compareBroken = 1 <
+  2;
 "
 `;
 
 exports[`format/expressions/binary-chains.mo > prints as snapshotted 1`] = `
-"let arithmetic = alphaBetaGamma +
-  deltaEpsilonZeta +
-  etaThetaIota +
-  kappaLambdaMu;
+"let arithmetic = alphaBetaGamma + deltaEpsilonZeta + etaThetaIota + kappaLambdaMu;
 
-let mixedPrecedence = alphaBetaGamma +
-  deltaEpsilonZeta *
-  etaThetaIota -
-  kappaLambdaMu;
+let mixedPrecedence = alphaBetaGamma + deltaEpsilonZeta * etaThetaIota - kappaLambdaMu;
 
-let booleanChain = alphaBetaGamma and
-  deltaEpsilonZeta or
-  etaThetaIota and
-  kappaLambdaMu;
+let booleanChain = alphaBetaGamma and deltaEpsilonZeta or etaThetaIota and kappaLambdaMu;
 
-let comparisonChain = alphaBetaGamma ==
-  deltaEpsilonZeta or
-  etaThetaIota <
-  kappaLambdaMu;
+let comparisonChain = alphaBetaGamma == deltaEpsilonZeta or etaThetaIota < kappaLambdaMu;
 
 let short = a + b + c;
 
-let single = proposal_submission_deposit_e8s +
-  system_params_reserve_e8s_plus_more;
+let single = proposal_submission_deposit_e8s + system_params_reserve_e8s_plus_more;
 
-let pipeline = [1, 2, 3]
-  |> Array.map(func(x : Nat) : Nat { x + 1 })
-  |> Array.filter(func x { x > 1 })
-  |> Array.size;
+let pipeline = [1, 2, 3] |> Array.map(func(x : Nat) : Nat { x + 1 }) |> Array.filter(func x { x > 1 }) |> Array.size;
 
 let withComment = alphaBetaGamma + // keep me
     deltaEpsilonZeta;
@@ -299,51 +271,37 @@ let shiftStaysLong = aaaaaaaabbbbbbbb >> ccccccccdddddddd;
 
 let glued = 1 + 1;
 
-let gluedLeft = 1 + 1;
+let gluedLeft = 1 +1;
 
 let gluedRight = 1 + 1;
 
 let gluedRel = a == b;
 
-let gluedChain = aaaaaaaabbbbbbbb +
-  ccccccccdddddddd +
-  eeeeeeeeffffffff +
-  gggggggghhhhhhhh;
+let gluedChain = aaaaaaaabbbbbbbb + ccccccccdddddddd + eeeeeeeeffffffff + gggggggghhhhhhhh;
 "
 `;
 
 exports[`format/expressions/coalesce-chains.mo > prints as snapshotted 1`] = `
 "let short = a ?? b ?? c;
 
-let longChain = aaaaaaaaaaaaaaa
-  ?? bbbbbbbbbbbbbbb
-  ?? ccccccccccccccc
-  ?? ddddddddddddddd
-  ?? eeeeeeeeeeeeeeeee;
+let longChain = aaaaaaaaaaaaaaa ?? bbbbbbbbbbbbbbb ?? ccccccccccccccc ?? ddddddddddddddd ?? eeeeeeeeeeeeeeeee;
 
-let singleOperator = proposal_submission_deposit_e8s
-  ?? system_params_reserve_e8s_plus_more;
+let singleOperator = proposal_submission_deposit_e8s ?? system_params_reserve_e8s_plus_more;
 
 let glued = a ?? b;
 
-let gluedChain = aaaaaaaabbbbbbbbbb
-  ?? ccccccccccdddddddddd
-  ?? eeeeeeeeeeffffffffff;
+let gluedChain = aaaaaaaabbbbbbbbbb ?? ccccccccccdddddddddd ?? eeeeeeeeeeffffffffff;
 
-let callOperands = someVeryLongFunctionName(argumentOne, argumentTwo)
-  ?? someOtherLongFunction(argumentThree, argumentFour);
+let callOperands = someVeryLongFunctionName(argumentOne, argumentTwo) ?? someOtherLongFunction(argumentThree, argumentFour);
 
-let nested = aaaaaaaaaaaaaaaaaaaaa
-  ?? (bbbbbbbbbbbbbbbbbbbbb ?? ccccccccccccccccccccc ?? ddddddddddddddddddddd);
+let nested = aaaaaaaaaaaaaaaaaaaaa ?? (bbbbbbbbbbbbbbbbbbbbb ?? ccccccccccccccccccccc ?? ddddddddddddddddddddd);
 
 let withComment = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ?? // keep me
     bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
 
-let mixedWithBinary = aaaaaaaaaaaaaaaaaaaaaaaa
-  ?? bbbbbbbbbbbbbbbbbbbbbb + cccccccccccccccccccccccc;
+let mixedWithBinary = aaaaaaaaaaaaaaaaaaaaaaaa ?? bbbbbbbbbbbbbbbbbbbbbb + cccccccccccccccccccccccc;
 
-let withHash = aaaaaaaaaaaaaaaaaaaa # bbbbbbbbbbbbbbbbbbbb
-  ?? cccccccccccccccccccc # dddddddddddddddddddd;
+let withHash = aaaaaaaaaaaaaaaaaaaa # bbbbbbbbbbbbbbbbbbbb ?? cccccccccccccccccccc # dddddddddddddddddddd;
 "
 `;
 
@@ -403,12 +361,24 @@ let v9 = ?#abc;
 "B";
 
 { a and b with c = d };
-{ a and b with c = d };
-{ a and b with c = d };
-{ a and b with c = d; e = f; };
+{
+  a and b with
+  c = d
+};
+{
+  a and b with
+  c = d
+};
+{
+  a and b with
+  c = d;
+  e = f;
+};
 
 if(x) { y };
-if(x) { y };
+if(
+  x
+) { y };
 "
 `;
 
@@ -479,57 +449,31 @@ shared query func f() : async () {};
 `;
 
 exports[`format/expressions/member-chains.mo > prints as snapshotted 1`] = `
-"let workedExample = x
-  .repeat(50)
-  .repeat(50)
-  .repeat(50)
-  .repeat(50)
-  .repeat(50)
-  .repeat(50)
-  .repeat(50);
+"let workedExample = x.repeat(50).repeat(50).repeat(50).repeat(50).repeat(50).repeat(50).repeat(50);
 
-let twoDotsNoCalls = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  .xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-  .xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
+let twoDotsNoCalls = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
 
-let defectCase = x
-  .field
-  .someVeryLongFunctionNameThatIsQuiteLongIndeed(aLongArgumentHere)
-  .bar(1);
+let defectCase = x.field.someVeryLongFunctionNameThatIsQuiteLongIndeed(aLongArgumentHere).bar(1);
 
-let twoCalls = someLongReceiverNameHere
-  .alphaBetaGammaDelta(someLongArgumentName)
-  .epsilonZetaEtaTheta(1);
+let twoCalls = someLongReceiverNameHere.alphaBetaGammaDelta(someLongArgumentName).epsilonZetaEtaTheta(1);
 
-let fieldOnly = someVeryLongReceiverNameHere
-  .alphaBetaGammaDelta
-  .epsilonZetaEtaTheta
-  .iotaKappaLambdaMu;
+let fieldOnly = someVeryLongReceiverNameHere.alphaBetaGammaDelta.epsilonZetaEtaTheta.iotaKappaLambdaMu;
 
 let shortChain = x.foo(a).bar(b);
 
 let breakAtArguments = xs.map(func (x : Nat) : Nat { return x + 1; });
 
 let spacedSource = someLongReceiverNameHere
-  .alphaBetaGammaDelta(a)
-  .epsilonZetaEtaTheta(b);
+    .alphaBetaGammaDelta(a)
+    .epsilonZetaEtaTheta(b);
 
-let receiverIsACall = f(
-  a
-).alphaBetaGammaDelta().epsilonZetaEtaTheta().iotaKappaLambdaMuNuXiOmicronPiRho();
+let receiverIsACall = f(a).alphaBetaGammaDelta().epsilonZetaEtaTheta().iotaKappaLambdaMuNuXiOmicronPiRho();
 
-let projected = someVeryLongReceiverNameHere
-  .alphaBetaGammaDelta(aLongArgument)
-  .epsilonZetaEtaTheta.1;
+let projected = someVeryLongReceiverNameHere.alphaBetaGammaDelta(aLongArgument).epsilonZetaEtaTheta.1;
 
-let nestedInArgument = outerFunction(
-  innerObject.someLongMethodName(anotherArgument).andAnotherMethod(1)
-).call();
+let nestedInArgument = outerFunction(innerObject.someLongMethodName(anotherArgument).andAnotherMethod(1)).call();
 
-let indexedHead = someLongArrayNameHere[0]
-  .alphaBetaGammaDelta(a)
-  .epsilonZetaEtaTheta(b)
-  .iotaKappaL(1);
+let indexedHead = someLongArrayNameHere[0].alphaBetaGammaDelta(a).epsilonZetaEtaTheta(b).iotaKappaL(1);
 "
 `;
 
@@ -548,10 +492,10 @@ x / 1;
 x - 1;
 x - 1.0;
 
-1 + 1;
-x + 1;
-1 - 1;
-x - 1;
+1 +1;
+x +1;
+1 -1;
+x -1;
 
 1. / +5;
 
@@ -591,7 +535,9 @@ x.0.y;
 
 ).0;
 
-(a).0;
+(
+  a
+).0;
 
 0. y;
 
@@ -640,11 +586,12 @@ exports[`format/imports/comment-in-section.mo > prints as snapshotted 1`] = `
 import A "A";
 // import B "B";
 import C "C";
-
 actor {};
 
 // note
-object Tail { public let x = 1; };
+object Tail {
+  public let x = 1;
+};
 "
 `;
 
@@ -660,7 +607,6 @@ actor {};
 exports[`format/imports/glued-section.mo > prints as snapshotted 1`] = `
 "import A "A";
 import B "B";
-
 actor {};
 "
 `;
@@ -685,9 +631,15 @@ exports[`format/layout/blank-lines-and-groups.mo > prints as snapshotted 1`] = `
 
 };
 
-{ a; b };
+{
+  a;
+  b
+};
 
-{ a; b };
+{
+  a;
+  b
+};
 
 a;
 
@@ -721,7 +673,9 @@ b;
   )
 );
 
-(func() { a });
+(func() {
+  a
+});
 
 (func() { a });
 
@@ -731,11 +685,26 @@ if true {} else {};
 
 if true (a) else (b);
 
-if true { a } else if false { b } else { c };
+if true {
+  a
+} else if false {
+  b
+} else {
+  c
+};
 
-[1, 2,];
+[
 
-{ abc; };
+  1,
+  2,
+
+];
+
+{
+
+  abc;
+
+};
 
 {
   a;
@@ -749,11 +718,18 @@ if true { a } else if false { b } else { c };
 exports[`format/layout/trailing-separators.mo > prints as snapshotted 1`] = `
 "let b1 = { a; };
 let b2 = { a };
-let b3 = { a; };
-let b4 = { a };
+let b3 = {
+  a;
+};
+let b4 = {
+  a
+};
 
 let b5 = { a; b };
-let b6 = { a; b; };
+let b6 = {
+  a;
+  b;
+};
 
 module M1 { let a = 1; };
 module M2 { let a = 1 };
@@ -774,8 +750,12 @@ let c2 = f(1);
 let k1 = [{ abc; }];
 let k2 = [{ abc; },];
 
-let v = [{ a = 1; },];
-let w = [{ a = 1; }];
+let v = [
+  { a = 1; },
+];
+let w = [
+  { a = 1; }
+];
 
 {}
 A;
@@ -851,18 +831,35 @@ try {}
 // Comment
 finally {};
 
-(a, b, c);
-(a, b, c,);
+(
+  a,
+  b,
+  c
+);
+(
+  a,
+  b,
+  c,
+);
 (a, b, c,);
 (a, b, c);
 
-[a, b];
-[a,];
+[
+  a,
+  b
+];
+[
+  a,
+];
 x : [
 T
 ];
 let z1 : [ { abc : Nat } ] = 1;
-let k = [{ abc; },];
+let k = [
+  {
+    abc;
+  },
+];
 
 "
 
@@ -994,51 +991,34 @@ type WithParams = { f<A>(a : A) : A };
 type Result = { #ok : Nat; #error : Text };
 type Status = { #Active; #Inactive; #Banned : Text };
 type Arrow = { x : Nat } -> Nat;
-type Wide = {
-  model : Text;
-  plate : Text;
-  isValid : Bool;
-  wasStolen : Bool;
-  expires : Nat
-};
+type Wide = { model : Text; plate : Text; isValid : Bool; wasStolen : Bool; expires : Nat };
 "
 `;
 
 exports[`format/obj-actors/record-literals.mo > prints as snapshotted 1`] = `
-"let collapsed = { a = 1; b = 2; };
+"let collapsed = {
+  a = 1;
+  b = 2;
+};
 let shorthand = { a; b };
 let renamed = { newX = x; y };
 let mutable = { x = 1; var y = 2 };
 let nested = { outer = { inner = { deep = 1 } } };
-let wide = {
-  alpha = 1;
-  beta = 2;
-  gamma = 3;
-  delta = 4;
-  epsilon = 5;
-  zeta = 6;
-  eta = 7
-};
+let wide = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 };
 let trailing = { a = 1; };
 "
 `;
 
 exports[`format/obj-actors/record-update.mo > prints as snapshotted 1`] = `
-"module M { public let u = 25; };
+"module M {
+  public let u = 25;
+};
 let a = { x = 1 };
 let base = { b = 6 };
 let andOnly = { a and M };
 let withOnly = { base with x = 2 };
 let andWith = { a and M with u = 1 };
 let nestedBase = { { c = "C"; d = "D" } with a = 8; b = 6 };
-let wide = {
-  veryLongBaseNameHere
-  with
-  alpha = 1;
-  beta = 2;
-  gamma = 3;
-  delta = 4;
-  epsilon = 5
-};
+let wide = { veryLongBaseNameHere with alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5 };
 "
 `;
