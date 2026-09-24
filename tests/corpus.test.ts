@@ -1,5 +1,6 @@
 /**
- * Every corpus file either parses and round-trips exactly, or is a known grammar rejection.
+ * Every corpus file either parses and round-trips exactly, or is a known grammar rejection,
+ * and every file that parses formats without tripping the runtime guard, to a fixed point.
  *
  * The corpus is the compiler's `test/` and motoko-core's `src/`, checked out as siblings of this repo (CI pins both revisions).
  * Without them the suite is skipped, unless `MOTOKO_CORPUS_REQUIRED` is set, which CI does so a broken checkout can't pass vacuously.
@@ -8,7 +9,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+import prettier from 'prettier';
 import { describe, expect, test } from 'vitest';
+
+import plugin from '../src/index.ts';
 
 import { MotokoSyntaxError, parse } from '../src/parser/parse.ts';
 import { checkRoundTrip } from '../src/parser/normalize.ts';
@@ -81,4 +85,37 @@ describe.skipIf(files.length === 0)('corpus', () => {
         expect(mismatches, 'the round-trip lost text').toEqual([]);
         expect(rejected.sort()).toEqual([...KNOWN_REJECTIONS].sort());
     });
+
+    test(
+        'every file that parses formats, and formatting again changes nothing',
+        { timeout: 300_000 },
+        async () => {
+            const failures: string[] = [];
+            const unstable: string[] = [];
+            for (const file of files) {
+                const source = readFileSync(file, 'utf8');
+                const options = {
+                    parser: 'motoko',
+                    plugins: [plugin],
+                    filepath: file,
+                };
+                let once: string;
+                try {
+                    once = await prettier.format(source, options);
+                } catch (error) {
+                    if (!(error instanceof MotokoSyntaxError)) {
+                        failures.push(
+                            `${display(file)}: ${(error as Error).message.split('\n')[0]}`,
+                        );
+                    }
+                    continue;
+                }
+                if ((await prettier.format(once, options)) !== once) {
+                    unstable.push(display(file));
+                }
+            }
+            expect(failures, 'formatting threw').toEqual([]);
+            expect(unstable, 'a second format changed the output').toEqual([]);
+        },
+    );
 });

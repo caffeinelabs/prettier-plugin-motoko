@@ -1,0 +1,2714 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`format/comments/comment-placement.mo > prints as snapshotted 1`] = `
+"/**
+ * Comment placement, and the verbatim rule.
+ *
+ * ## Where this file comes from
+ *
+ * The Comments triage group (\`docs/fixture-triage.md\` §"Comments — mostly **change**"): \`line
+ * comments\`, \`block comments\`, \`line comment in single line\`, \`prettier-ignore line comment as first
+ * line in block\`, \`unclosed quotes in comments\`. The sixth name in that group, \`prettier-ignore\`, is
+ * a **keep** and already has its own fixture (\`tests/format/comments/prettier-ignore.mo\`); it is not
+ * repeated here.
+ *
+ * ## The rule, from \`docs/style.md\` §Comments
+ *
+ * "**Printed verbatim.** Never converted between \`//\` and block form. Never reflowed, re-wrapped or
+ * re-indented beyond the current indentation level." And: "A **line comment inside a group forces the
+ * group to break.**"
+ *
+ * That is the whole content of this file. Every case below is a comment whose *text* the printer must
+ * reproduce byte for byte — including a comment whose text contains a quote, a brace, or a semicolon
+ * — sitting where the printer has to decide only *where the comment goes*, never what it says.
+ *
+ * ## Measured
+ *
+ * \`.probe/_cmtport.mts\` (pass 1, the legacy inputs verbatim), \`.probe/_cmtport2.mts\` through
+ * \`.probe/_cmtport8.mts\` (the re-spellings, the placement set and the group-break control), and
+ * \`.probe/_cmtfinal.mts\`, which reads *this file* and reports parse-clean, the four mocs' verdicts
+ * and the fixed point. Per case: our parser accepts it, all four mocs accept it, and the printer's
+ * output is a **fixed point**. \`moc\`'s exit code is 0 for invalid input too and \`--check\` writes to
+ * stderr, so the verdicts come from a verifier that reads both streams (\`_cmtverify.mts\`). The four
+ * builds, by the label the tables below use:
+ *
+ * | label   | path                                                      | \`--version\`                                       |
+ * | ------- | --------------------------------------------------------- | ------------------------------------------------- |
+ * | 1.1.0   | \`~/.cache/dfinity/versions/0.31.0/moc\`                    | \`Motoko compiler 1.1.0 (source q8nbql1z-…-j6bq1lwd)\` |
+ * | rel1.16 | \`/tmp/moctar/moc\`                                         | \`Motoko compiler 1.16.1 (source cmnnq83c-…-qfay9xca)\` |
+ * | pin     | \`/tmp/moc6385/src/_build/default/exes/moc.exe\`            | \`Motoko compiler (source 1.16.1-26-g1d57a4fc7b)\`   |
+ * | v2      | \`/tmp/mocnow/moc\`                                         | \`Motoko compiler 2.0.0-beta.1 (source cm629575-…-q1bsqjv2)\` |
+ *
+ * A warning for whoever re-measures this: \`.probe/_fixverify.mts\` writes every case to the fixed
+ * path \`/tmp/_fv.mo\`. With more than one agent probing in this worktree, a concurrent writer lands
+ * between the write and the \`moc\` read and the column silently reports *another* agent's source. The
+ * first run of this port was wrong for exactly that reason (it reported \`SYNTAX\` for a run of stars
+ * between two slashes, which is a comment). \`_cmtverify.mts\` writes a pid-unique file instead.
+ *
+ * ## The change this group is about
+ *
+ * The legacy \`line comment in single line\` expects \`a<(b,\\n//c\\n)>()\` to become \`a<(b, /* c */)>()\`
+ * — a \`//\` rewritten into block form so the group could stay on one line. That is the old algorithm
+ * doing what the verbatim rule forbids: it moved a comment's *text* to make a layout work. The
+ * section below is that same input and the printer now keeps \`//c\` as written and breaks the group
+ * instead, which is the second half of the rule above.
+ *
+ * ## The known failure, reproduced and reported
+ *
+ * **Status: fixed on an unmerged branch.** PR #197 (\`fix/comment-separator-seam\`) repairs this whole
+ * class — the separator moves to the line after the comment, and the comment stays where the source
+ * put it. So the four rows below are a *reproduction on the current tree*, not an open question, and
+ * they must not be re-derived. They are kept in this header because they are the reason none of the
+ * four inputs appears in the body: a fixture that throws fails the whole suite rather than pinning
+ * one behaviour, and deleting the note would make the omission look accidental.
+ *
+ * There is a seam where **the printer throws on input all four mocs accept**. The minimal input is
+ *
+ *     let o = { a = 1 // first
+ *     ; b = 2 };
+ *
+ * which every moc parses (measured: \`OK\` on all four — it reaches no error at all) and our own parser
+ * also accepts, but \`prettier.format\` fails the internal re-parse with
+ *
+ *     prettier-plugin-motoko: internal error — the printer produced code that does not parse.
+ *     Unexpected input at 4:7.
+ *
+ * The class is a comment sitting **between an item and its separator**: a line comment before the \`;\`
+ * of a record field, or before the \`,\` of an array/tuple element, or before the \`;\` of a sequence
+ * element. Measured instances and their exceptions:
+ *
+ * | input                                   | moc      | printer |
+ * | --------------------------------------- | -------- | ------- |
+ * | \`let o = { a = 1 // c\\n; b = 2 };\`      | OK x4    | \`does not parse\`, \`Unexpected input at 4:7\` |
+ * | \`[ 1 // c\\n, 2 ];\`                      | OK x4    | \`changed the meaning\`, \`at .0.0\` (input 6, output 3) |
+ * | \`(a // c\\n, b);\`                        | TYPE x4  | \`changed the meaning\`, \`at .0.0\` (input 6, output 3) |
+ * | \`1 // c\\n; 2;\`                          | TYPE x4  | \`changed the meaning\`, \`at \` (position blank) |
+ *
+ * The block-comment spelling of the first row is *fine* (\`let o = { a = 1 /* c */; b = 2 };\` prints);
+ * so is the same comment in any position that is not immediately before the separator
+ * (\`let o = { a = 1; /* c */ b = 2 };\` prints). So the gap is specifically a comment between an item
+ * and the token that follows it, and none of these four inputs is below.
+ * \`.probe/_cmtport5.mts\` is the script that produced the table; \`.probe/_throwcheck.mts\` reproduces
+ * all four independently, controls included.
+ *
+ * ## Two groups are not valid Motoko at all
+ *
+ * Neither is ported at its legacy spelling. Both are \`delete\`-class, and
+ * \`docs/grammar-deviations.md\` is where a gap like this belongs rather than a snapshot.
+ *
+ * 1. **\`prettier-ignore line comment as first line in block\`** — \`{\\n// prettier-ignore\\n  123}\`. All
+ *    four mocs reject it: \`syntax error [M0001], unexpected token '}', expected one of token or
+ *    <phrase> sequence\`. At head a bare \`{ … }\` is a **record literal**, not a block, so \`123\` has to
+ *    be a field and it is not one — the identical error appears with no comment present
+ *    (\`{ 123 }\`, and \`{123}\`). The directive is exercised below at a spelling that is a block,
+ *    \`do { … }\`, where all four mocs accept it and the comment survives verbatim.
+ * 2. **\`unclosed quotes in comments\`** — eight fragments of the form \`// a'b\\n '\` (a comment
+ *    containing a quote, then a bare \`'\`). The bare \`'\` is the problem, not the comment: \`moc\`
+ *    answers \`syntax error [M0002], malformed operator\` or \`unclosed text literal\`, and so does our
+ *    parser. What the legacy test was really pinning — that a quote *inside* a comment does not open
+ *    a literal — is kept below, with a real statement after the comment instead of a bare quote.
+ *
+ * ## Every statement ends in \`;\`
+ *
+ * The harness formats this file as one program. Two adjacent statements with nothing between them are
+ * a parse error (\`Missing ';'\`), and a top-level \`{ … }\` is a record literal and needs one too.
+ */
+
+// --- Line comments are verbatim, and a run of blanks still collapses to one -----------------------
+//
+// The comment inside the record and the comment after it are both \`//\`; neither is converted, and the
+// \`//\` after the record keeps its \`}\\n//\` placement with no space invented between them — the legacy
+// \`line comments\` case expected \`} //\` on one line, which is the placement change this section pins.
+// (Measured: the space is the whole difference; when nothing follows the \`//\` it prints on its own
+// line, \`}\\n//\`, and with items after it the two tokens are glued, \`}//\`, exactly as the source has
+// them. \`.probe/_cmtport8.mts\`.) The blank-line rule is \`docs/style.md\` §Blank lines and applies to
+// comments like any item.
+
+{
+  //
+}//
+
+//a
+//b
+
+//a
+
+
+//b
+
+// The legacy \`line comments\` case in its \`;\` spelling: the record is a statement and the comment
+// after it is a separate item. Both the comment inside the record and the one on the last line are
+// kept, and the file-edge trailing blank is dropped.
+
+{
+  //
+};
+
+//
+
+// --- A line comment inside a group forces the group to break ---------------------------------------
+//
+// This is the \`line comment in single line\` case, and the reason the group is a **change**. The
+// legacy expectation \`a<(b, /* c */)>()\` only works if the \`//\` is rewritten, which the verbatim rule
+// forbids. Keeping \`//c\` means the comment runs to end of line, so the group opens up instead. The
+// same input with no comment (\`a<(b)>()\`) is the control: it stays on one line, so the break below is
+// the comment's doing and not a rule about \`<…>\` argument lists.
+
+a<
+  (
+    b,
+    //c
+  )>();
+
+a<(b)>();
+
+// --- Block comments: the star run, verbatim --------------------------------------------------------
+//
+// The legacy \`block comments\` test loops \`/*\` + n stars + \`/\` for n in 0..9 and expects each back
+// unchanged. All ten print as written. They are here because a printer that "normalised" comment
+// text — collapsed a run of stars, re-indented a multi-line comment — would move exactly these.
+
+/**/
+/***/
+/****/
+/*****/
+/******/
+/*******/
+/********/
+/*********/
+/**********/
+/***********/
+
+// The \`=\` and space spellings, also \`expectFormatted\` in the legacy suite. \`/**/\` is two chars of
+// body and \`/** **/\` is a body that is not a doc comment, whatever the opener looks like.
+
+/*=*/
+/**=*/
+/**=**/
+/** **/
+/*** **/
+/** ***/
+
+// One comment token spanning lines. Its internal newlines are its own text, so they survive as
+// written, including the leading spaces on the continuation lines.
+
+/****
+-----
+******/
+
+// The same multi-line comment as an item of a record. The legacy spelling puts a \`;\` right after the
+// closer (\`…******/;\`) and all four mocs reject it — \`unexpected token ';'\` on 1.1.0/rel1.16,
+// \`braces \\\`{ ... }\\\` enclose a record literal\` on pin/v2 — because the comment is not a field, so the
+// \`;\` has no item to follow. Without the \`;\` it is an ordinary item and prints as written.
+
+{
+  /****
+  -----
+  ******/
+};
+
+// --- Adjacent block comments, and the blank rule between them --------------------------------------
+//
+// The legacy \`/**//**/\` case expects a space between the two comments; measured, the printer puts
+// each on its own line, which is the **change** (a space would be a character the source does not
+// have). The blank version is \`\\n/**/\\n\\n\\n/**/\`: the file-edge blanks are dropped and the run of
+// three collapses to one, so the two comments are separated by one blank line.
+
+/**/ /**/
+
+/**/
+
+/**/
+
+// --- A comment is a token, not whitespace ----------------------------------------------------------
+//
+// \`let/*{{*/x\` is one \`let\`, one comment and one binding, and the comment's braces are its own text:
+// it is not a record literal and does not open one. The spaced spelling on the second line is the
+// same program — the printer does not add or remove the space around the comment, because a comment
+// is a token and the gaps around it are the author's.
+
+let/*{{*/x = 0; //x
+(x);
+
+let /*{{*/ x = 1;
+
+// --- The \`prettier-ignore\` directive, at its valid spelling -----------------------------------------
+//
+// The legacy spelling of this case (\`{\\n// prettier-ignore\\n  123}\`, section header above) is not
+// Motoko: \`{ … }\` is a record literal and \`123\` is not a field. \`do { … }\` *is* a block, all four
+// mocs accept it, and the printer honours the directive there — the ignored \`123\` reproduces its
+// source spacing (\`  123\`) while the block around it re-indents. The third case is the control: the
+// same block with an ordinary comment and no directive, where the item normalises.
+
+do {
+  // prettier-ignore
+  123
+};
+
+do {
+  // c
+  123
+};
+
+// --- A quote inside a comment does not open a literal ----------------------------------------------
+//
+// The \`unclosed quotes in comments\` group, re-spelled. In every case the comment's text contains a
+// quote character — a bare \`'\`, a bare \`"\`, or one of the two sitting next to a semicolon or a brace
+// — and the next line is a real statement. A lexer that scanned the comment as code would see an
+// unterminated literal here; the printer reproduces both the comment and the statement unchanged.
+
+// a'b
+1;
+
+// a"b
+1;
+
+//'
+1;
+
+//"
+1;
+
+/*'*/
+1;
+
+/*;"*/
+1;
+
+/* a'b */
+1;
+
+/* a"b */
+1;
+"
+`;
+
+exports[`format/comments/prettier-ignore.mo > prints as snapshotted 1`] = `
+"/**
+ * \`prettier-ignore\`: a directive comment suppresses formatting of the item after it.
+ *
+ * ## Where this file comes from
+ *
+ * The legacy \`prettier-ignore\` test holds four cases. Two are portable as written, one needs a
+ * spelling that parses, and one is not Motoko at all:
+ *
+ * - \`//prettier-ignore\\n1*1;\\n2*2\` and its blank-line variant — portable; both are below.
+ * - \`// prettier-ignore\\n{\\nabc}\` — portable; the record at the end is below.
+ * - the block-comment directive on a record spanning lines — **not Motoko**. \`moc\` rejects it
+ *   (\`M0001\`, "unexpected token '}'"): record fields need \`;\`, so the two fields in the operand have
+ *   no separator between them. The *directive* is fine, and its block spelling is exercised below at a
+ *   spelling that parses; what is dropped is the malformed operand. See \`docs/fixture-triage.md\`
+ *   §"The refusals, measured" for the class this belongs to.
+ *
+ * ## The rule
+ *
+ * \`src/printer/walk.ts:itemDoc\` looks at the item *before* the one it is printing and, if that item
+ * is a comment whose text is \`prettier-ignore\`, emits the current item through \`verbatim\` instead of
+ * through \`nodeDoc\`. So the ignored item reproduces its source bytes exactly — including spacing the
+ * printer would otherwise normalise — and its neighbours are unaffected.
+ *
+ * That "neighbours are unaffected" half is the point of the third and fourth sections: the directive
+ * applies to exactly one item, so the item after it still normalises. A fixture with only ignored
+ * items would pass even if the directive leaked to the rest of the file.
+ *
+ * ## Why the ignored lines look unformatted on purpose
+ *
+ * \`1*1\` and \`2*2+2\` are here because this printer normalises operator spacing (\`operator-spacing.mo\`
+ * in \`tests/format/expressions/\` is the positive control). Writing the canonical \`1 * 1\` after a
+ * \`prettier-ignore\` would make the fixture pass whether or not the directive works, which is the
+ * failure mode this file exists to catch.
+ */
+
+// --- A line-comment directive suppresses the next item --------------------------------------------
+//
+// \`1*1\` keeps its missing spaces; \`2*2\` on the next line does not, because the directive covers one
+// item and not the rest of the file.
+
+//prettier-ignore
+1*1;
+2 * 2;
+
+// --- The directive does not swallow the blank line after it ---------------------------------------
+//
+// The legacy case pairs this with the one above to show the two behaviours are independent: the
+// ignored item is still verbatim, and the blank line the author wrote still survives as one blank.
+
+//prettier-ignore
+1*1;
+
+2 * 2;
+
+// --- A spaced directive works the same way --------------------------------------------------------
+//
+// \`// prettier-ignore\` with a space is the same directive (\`isIgnoreDirective\` trims), so the
+// multi-line record is kept on its own lines. The second pair is the control: the same record with no
+// directive collapses to one line, which is what makes the first pair evidence of anything.
+
+// prettier-ignore
+let rec1 = {
+abc};
+
+let rec2 = { abc };
+
+// --- The block-comment spelling -------------------------------------------------------------------
+//
+// A block comment is a comment too, so it is a directive when its inner text is \`prettier-ignore\`.
+// On its own line the printer keeps it where it is and the item after it is verbatim.
+
+/* prettier-ignore */
+let b1 = 2*2+2;
+
+let b2 = 2 * 2 + 2;
+
+// --- A directive in the middle of a file ----------------------------------------------------------
+//
+// The case that most needs pinning: the ignored item sits between two ordinary ones, so a directive
+// that applied from its line to the end of the file would be visible here and nowhere above.
+
+let a = 1 * 1 + 1;
+
+// prettier-ignore
+let b = 2*2+2;
+
+let c = 3 * 3 + 3;
+"
+`;
+
+exports[`format/comments/separator-seams.mo > prints as snapshotted 1`] = `
+"/**
+ * Comments sitting on the *separator seam* of a list: a \`//\` that is itself a list item, or the item
+ * immediately before a list's own \`;\`/\`,\`.
+ *
+ * This fixture is a correctness fixture, not a style one. Every case in it used to make the printer
+ * **throw**, and it threw on input \`moc\` accepts — so the printer could not format a file the
+ * compiler builds. That is the same failure class as \`angle-lists.mo\`'s \`trailingComment\`, with the
+ * same mechanism, one item earlier in the list.
+ *
+ * ## The mechanism, once
+ *
+ * \`commentDoc\` is \`[verbatim(node), breakParent]\` (walk.ts). A line comment's text is therefore
+ * already terminated by a forced break, and anything the printer appends *after* that doc lands
+ * inside the comment, because a \`//\` runs to the newline. The old code appended the separator after
+ * the item:
+ *
+ *     f(a // c
+ *     , b);          ->   f(
+ *                           a
+ *                           // c,        <- the comma is inside the comment
+ *                           b
+ *                         );
+ *
+ * The separator is gone, the guard re-parses, sees a different tree, and refuses. So the fix is
+ * ordering: for a comment, the break goes **first** and the separator **after** it, which is the only
+ * spelling that ends the comment before the separator.
+ *
+ * ## The comment stays on the line the author put it on
+ *
+ * Ordering alone leaves one more question — where the comment itself goes — and the answer is the
+ * source's. A comment the source wrote at the end of \`a\`'s line (\`a // c\`) stays there, and the
+ * separator leads the next line; a comment the source wrote on a line of its own is left there. That
+ * is what \`docs/style.md\`'s fence shows (\`a = 1; // first\` stays glued) and what 0.13.0 did: a
+ * trailing comment is *attached* to the item before it, and detaching it is churn the style does not
+ * ask for. So the seam checks the comment's own gap — no newline before it means the source wrote it
+ * on the previous item's line — and glues rather than breaks when that is what the source did.
+ *
+ * The two are independent, which is why both are pinned below: the *separator's* place follows from
+ * the comment being an item that would swallow it, and the *comment's* place follows from the source.
+ * A block comment is forced open by its \`breakParent\` like any other, so the fixture's \`block\` case
+ * breaks the list too — that is the group rule, not the separator rule.
+ *
+ * ## Why a line-leading separator is not a hack
+ *
+ * \`,\` and \`;\` on a line of their own are ordinary Motoko, and the corpus writes them —
+ * \`../motoko/test/repl/lib/type-lub.mo\` leads seven lines with \`,\`. moc accepts both spellings, and
+ * the outputs below are checked against it rather than assumed: each is printed, written to a file,
+ * and fed to \`/tmp/moctar/moc -dp\` (\`.probe/_moccheck.mts\`), whose report is grepped for
+ * \`syntax error\` — **not** read from its exit code. The distinction is load-bearing here and was got
+ * wrong once: these cases are fragments, so moc fails name resolution on them and exits 1 whether or
+ * not the separator is spelled right. ON THE INPUT the fix replaced — the comma inside the comment,
+ * \`f(\\n  a // c,\\n  b\\n)\` — moc reports **zero syntax errors too**, and exits 1 for the same
+ * name-resolution reason. That is exactly why this bug needed no compiler to find and is a guard
+ * catch rather than a moc catch: the mis-spelling parses, it just means a different tree, so
+ * \`verify.ts\`'s re-parse comparison is the only thing that can see it. The grep is what separates
+ * "accepted" from "accepted as something else".
+ *
+ * ## The cases are the three sites the rule reaches
+ *
+ *  - a **list** separator (\`betweenSeparator\`) — \`par_exp\`, \`array_exp\`, and the two angle families,
+ *  - the **last** item's separator (\`trailingSeparator\`) — \`f(a, b // c)\` spelled with a comma,
+ *  - a **source-file** separator (\`sourceFileDoc\`) — where a comment is an item in its own right, so
+ *    \`let o = 1 // c\` / \`;\` puts the \`;\` in exactly the same seam.
+ *
+ * The last one is why \`sourceFileDoc\` routes through \`trailingSeparator\` at all rather than emitting
+ * its \`;\` directly: a file is a \`semi_sep\` list, and this is the one input where that shows.
+ */
+
+// A comment as a non-last item, with the source's comma after it. The ordinary case, and the one the
+// old code got wrong most visibly: the list is forced broken by the comment, so the separator has to
+// lead its own line. The comment itself stays on \`a\`'s line, because that is where the source put it.
+let parExp = f(
+  a // c
+  ,
+  b
+);
+
+// The same seam in a bracket list. \`array_exp\` is the other \`comma_sep\` family, and it is listed
+// separately from \`par_exp\` in \`parts.ts\` so the rule is pinned twice.
+let arrayExp = [
+  a // c
+  ,
+  b
+];
+
+// A comment as the *last* item, with a trailing comma after it. \`trailingSeparator\` used to emit the
+// comma after the comment's forced break, exactly as \`betweenSeparator\` did, and swallow it the same
+// way. Only the separated case is affected: an unseparated last item emits \`''\` and has nothing to
+// swallow, which is why this is narrow.
+let trailingComma = f(
+  a
+  // c
+  ,
+);
+
+// The file-level seam. Here the comment is not inside a list at all — it is a \`source_file\` item, and
+// the \`;\` is *its* separator rather than the preceding declaration's. \`let o = 1 // c\` puts the \`;\` on
+// the next line, which makes it the comment's, and the old \`sourceFileDoc\` emitted it directly into
+// the comment.
+let fileSeam = 1 // c
+;
+
+// The angle families carry the same rule and an additional hazard: the close is \`closeGlued\`, so a
+// comment as the *last* item also has to drop the glue and precede the \`>\`. That last-item case is
+// \`angle-lists.mo\`'s and is fixed there. This is the non-last case, where the comma is the problem
+// and the glue is not yet involved.
+//
+// It is an \`inst\` rather than a \`typ_params\` for a reason that is moc's rather than the printer's: a
+// comment inside a \`typ_params\` is a syntax error for moc no matter where the comma goes (measured —
+// both spellings report one), which is the same asymmetry \`angle-lists.mo\` records in
+// \`TrailingCommentInParameters\`. So a \`typ_params\` version of this case could not be a fixture
+// asserting the printer formats *valid* Motoko, because the input is not valid Motoko. \`inst\` is the
+// family that accepts the comment, so \`inst\` is where the rule is pinned from the outside.
+let angleSeam = L.make<
+  A // c
+  ,
+  B>();
+
+// The attachment rule on its own, with no separator in the seam to confuse it. The two declarations
+// differ only in where the author wrote the comment, and the printer reproduces that difference rather
+// than picking one: \`preserve\`'s job is to change layout, not to move a comment the source placed.
+// \`angle-lists.mo\` pins the same pair one item later, in the \`closeGlued\` seam.
+let attachedComment = f(
+  a,
+  b // trailing
+);
+let ownLineComment = f(
+  a,
+  // own line
+  b
+);
+
+// A block comment takes the other branch of the *attachment* rule and the same branch of the group
+// rule. Its \`breakParent\` forces the list open exactly as a line comment's does — the group rule does
+// not care which comment kind it is — but it stays glued to \`a\`, because that is where the source
+// wrote it, and the separator after it is already outside the comment. This pair with the first case
+// is the point of the rule keying on the comment's *kind*: \`willBreak\` is also true for an item that
+// merely *contains* a comment, and moving the separator for one of those would detach the comma from
+// its own item — a rewrite the guard would catch, and worse output than the bug it fixed.
+let blockCommentUnaffected = f(
+  a /* c */,
+  b
+);
+"
+`;
+
+exports[`format/control-flow/switch-case.mo > prints as snapshotted 1`] = `
+"/**
+ * \`switch\`/\`case\`: where a broken switch puts its arms.
+ *
+ * Every case here is written so that the *source's own* layout is not the one the rule asks for, and
+ * the first section is the one that mattered: written flat and over \`printWidth\`, the switch used to
+ * break inside the \`case (\` — because the arm's pattern is a \`tup_pat\` owning a \`comma_sep\` list, and
+ * that list was the only break candidate under the enclosing node. The arms never got a line of their
+ * own, and no gate in this repo could see it: \`verify.ts\` compares token texts, and
+ * \`switch (x) { case (\\n #a\\n) e }\` has exactly the same tokens as the flat spelling.
+ *
+ * The shape the snapshot should show is \`docs/style.md\` §"Switch / case layout": one \`case\` per line
+ * when the switch breaks, arms indented one level, and the arm body hugging \`case p { e }\`.
+ *
+ * ## Two different \`;\`s, and both are tested below
+ *
+ * A bare \`switch\` at the top level is an \`exp_dec\`, and the grammar requires a \`;\` between two of
+ * them — that is the *statement* terminator, and it is the same rule as anywhere else. Inside the
+ * braces there is a second, unrelated \`;\`: the source's own arm separator, which \`preserve\`
+ * reproduces and never chooses. The cases that write both are marked, because reading one as the
+ * other is the easy mistake here.
+ */
+
+// Over \`printWidth\` at 80, so the arms must take a line each. Before this area printer existed this
+// broke inside \`case (\` on every arm — see the header.
+switch (someLongScrutineeExpressionHere) {
+  case (#alphaVariant) alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambda;
+  case (#betaVariant) alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambda;
+  case (_) alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambda
+};
+
+// A switch that fits stays on one line, which \`docs/style.md\` explicitly allows — \`line\` flattens to
+// a space, so the one Doc gives both layouts and the rule needs no \`ifBreak\`.
+switch (mode) { case #up { +1 }; case #dn { -1 } };
+
+// The scrutinee's own parens are the source's, not the printer's: §"Switch / case layout" keeps them
+// as written, so a paren-free scrutinee stays paren-free.
+switch x { case (#a) 1 };
+
+// An arm whose body has no break point of its own puts its break between the pattern and the body —
+// the "indented one more level" half of the rule. The pattern itself stays flat, which is the point:
+// before the arm owned a break, the only thing that could give was the \`tup_pat\` around it.
+switch (someLongScrutineeExpressionHere) {
+  case (#a)
+    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXiOmicronPiRhoSigma;
+  case (_) 2
+};
+
+// Both \`;\`s at once: the arm separator after \`2\` is inside the braces, and the statement terminator
+// is the one after \`}\`. The source's arm separator is a real child token, so it is reproduced exactly
+// and never chosen — \`.probe/_switchsemi.mts\` measures that the two spellings have different shapes.
+switch (x) { case (#a) 1; case (_) 2; };
+
+// No trailing arm separator in the source, none in the output: the same rule, the other direction.
+// The \`;\` here is only the statement terminator.
+switch (x) { case (#a) 1; case (_) 2 };
+
+// A body that can break *internally* hugs \`case p { e }\` and takes its break inside itself — the
+// guide's own shape. This is the half that shows why the arm does *not* emit its break
+// unconditionally: doing that would orphan the \`{\` on a line of its own, which is neither form the
+// guide allows.
+switch (x) {
+  case (#alphaVariant) {
+    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi1
+  };
+  case (#betaVariant) {
+    alphaBetaGammaDeltaEpsilonZetaEtaThetaIotaKappaLambdaMuNuXi2
+  }
+};
+
+// The case that decides *how* "can break internally" is tested, and the one a narrower test gets
+// wrong. A nested \`switch\` is not a list, but it is a body with a break of its own to give — so it
+// hugs, exactly as the block above does, with its arms one level deeper than the outer arm. The
+// first draft asked \`listOf(body) !== null\`, which missed this and printed the inner \`switch\` on a
+// line of its own with the arm orphaned above it.
+switch (a) {
+  case (#VCon (tag, args)) switch tag {
+    case "0" b;
+    case _ { assert false; #VInt 0 }
+  };
+  case _ { assert false; #VInt 0 }
+};
+"
+`;
+
+exports[`format/expressions/angle-lists.mo > prints as snapshotted 1`] = `
+"/**
+ * Angle lists: \`typ_params\` and \`inst\`, and the one item glue cannot be trusted with.
+ *
+ * Both families are \`closeGlued\` — the closing \`>\` is never preceded by a break, not even a
+ * \`softline\` that flattens to nothing — because moc's lexer reads a \`>\` with whitespace on both
+ * sides as \`GTOP\` rather than a close, so a broken \`>\` stops being a closing angle bracket. That
+ * rule is \`docs/style.md\`'s and this fixture is where it is pinned from the outside.
+ *
+ * ## The last section is the bug this fixture exists for
+ *
+ * A **line comment** as the list's last item is the single case glue gets wrong, and it got it wrong
+ * silently until now: \`commentDoc\` forces the group open, so the list is always printed broken, and
+ * the glue then attached the \`>\` to the comment's own text — \`// c>\` — which drops the close
+ * entirely. \`src/verify.ts\` caught it on re-parse, so the file was never *written* wrong; the printer
+ * threw instead, and it threw on input moc accepts:
+ *
+ *     let x = L.make<
+ *       Nat,
+ *       Int // c
+ *     >();
+ *
+ * That is \`inst: trailing comment\` below, and it is the case that makes the exception a correctness
+ * fix rather than a taste. There is no join that works: glue puts the \`>\` inside the comment, and a
+ * space leaves the \`>\` inside it too, because a line comment runs to the newline. The close goes on
+ * its own line, which is the only spelling that ends the comment first.
+ *
+ * A **block** comment is not the same case and stays glued — it ends at its own delimiter rather
+ * than at the newline, so the \`>\` after it is outside. \`blockCommentStaysGlued\` is that pair.
+ *
+ * ## Why every case is bound with \`let\` or \`type\`
+ *
+ * Same reason as \`member-chains.mo\`: a bare expression would be an \`exp_dec\` whose \`;\` is a
+ * source-file sibling, and the fixture would then be asserting a token it did not mean to test.
+ */
+
+// Fits, so the angles stay flat and the close is glued to the last argument — the ordinary case the
+// \`closeGlued\` flag is written for.
+let fitsFlat = L.make<Nat, Int>();
+
+// Over \`printWidth\`, so the list breaks: one argument per line, and the \`>\` glued to the last one
+// rather than broken onto a line of its own, which is the rule this family exists to enforce.
+let breaksWithCloseGlued = someLongReceiverNameHere.methodName<
+  SomeLongTypeArgumentName,
+  AnotherLongTypeArgumentName>(anArgument);
+
+// The same shape as a type parameter list. \`typ_params\` carries the identical \`closeGlued\` rule, and
+// the two families are listed separately in \`parts.ts\`'s table precisely so this can be pinned twice.
+type LongTypeParameters<
+  SomeLongTypeParameterName,
+  AnotherLongTypeParameterName,
+  AThirdLongOne> = SomeLongTypeParameterName;
+
+// The trailing line comment — the crash. \`moc 1.16.0\` accepts the input, so a printer that refuses it
+// cannot format a file the compiler builds. The close takes a line of its own and the \`>\` is outside
+// the comment; \`// c\` is not swallowed and neither is the \`>\`.
+let trailingComment = L.make<
+  Nat,
+  Int // c
+>();
+
+// A line comment in the *middle* of the list is a different question and never needed the exception:
+// the comment is not last, so the glue is not what the close follows. It breaks to its own line at
+// the list's indent and the following argument continues after it.
+let middleComment = L.make<
+  Nat, // c
+  Int>();
+
+// A block comment as the last item stays glued. This is the pair to \`trailingComment\`: the same
+// position and the opposite answer, and the reason is where the comment ends — at its own delimiter
+// rather than at the newline — so the \`>\` is already outside it.
+let blockCommentStaysGlued = L.make<
+  Nat,
+  Int /* c */>();
+
+// The same seam in a \`typ_params\`, where moc is stricter about a trailing comment than it is for
+// \`inst\`: this exact input is a syntax error for moc, so the printer's job is only to keep the
+// tokens in the same order and let the guard compare trees. Recorded so the asymmetry is visible
+// rather than looking like an oversight in the case above. \`_moccheck.mts\` reports this file with
+// exactly one moc error *in* and one *out*, which is this declaration in both — the fixture is not
+// introducing a parse problem moc did not already have.
+type TrailingCommentInParameters<
+  A,
+  B // c
+> = A;
+
+// Below \`printWidth\` after breaking, so the group's fit check settles it and the close stays glued
+// even though the source was written with the \`>\` on its own line — the flag overriding the source's
+// own layout, which is visible churn this area is allowed to produce because a broken \`>\` is not
+// parseable in the first place.
+type ShortParameters<A, B> = A;
+"
+`;
+
+exports[`format/expressions/angle-seams.mo > prints as snapshotted 1`] = `
+"// moc reads \`<\`/\`>\` as comparisons only when spaced on both sides, so these instantiations keep their spacing.
+func id<T>(x : T) : T { x };
+let spacedBeforeAngle = id <Nat>(1);
+let inAChain = 1 + id <Nat>(2);
+let compare = 1 < 2;
+let compareBroken = 1 < 2;
+"
+`;
+
+exports[`format/expressions/binary-chains.mo > prints as snapshotted 1`] = `
+"/**
+ * Binary chains: the rule \`docs/style.md\` states, and the two operators that opt out of it.
+ *
+ * Every chain here is written *flat* in the source and does not fit \`printWidth\` at 80 once the
+ * printer has chosen where to break, so the snapshot records the break direction rather than the
+ * source's own layout. That is the point of the area: the source-gap printer a chain falls back to
+ * reproduces the source's *spaces*, and a space never breaks, so before this area printer existed
+ * every one of these stayed on one over-long line.
+ *
+ * The last section is the interesting half. \`#\` and the §2.7 indivisible set must not trail a line,
+ * so their chains refuse to break at all and fall back to the long line — the comment on each
+ * records which gate is blind to why.
+ */
+
+let arithmetic = alphaBetaGamma +
+  deltaEpsilonZeta +
+  etaThetaIota +
+  kappaLambdaMu;
+
+let mixedPrecedence = alphaBetaGamma +
+  deltaEpsilonZeta *
+  etaThetaIota -
+  kappaLambdaMu;
+
+let booleanChain = alphaBetaGamma and
+  deltaEpsilonZeta or
+  etaThetaIota and
+  kappaLambdaMu;
+
+let comparisonChain = alphaBetaGamma ==
+  deltaEpsilonZeta or
+  etaThetaIota <
+  kappaLambdaMu;
+
+// A chain that fits stays flat, because \`line\` flattens to a single space and the flat form is
+// exactly the source's own spacing. This is the half that the runtime guard can see.
+let short = a + b + c;
+
+// A one-operator chain still breaks: \`dao.mo\` in the corpus is the counter-example that removed
+// the first draft's two-operator minimum.
+let single = proposal_submission_deposit_e8s +
+  system_params_reserve_e8s_plus_more;
+
+// \`|>\` breaks *before* each operator, the opposite direction to every chain above.
+let pipeline = [1, 2, 3]
+  |> Array.map(func(x : Nat) : Nat { x + 1 })
+  |> Array.filter(func x { x > 1 })
+  |> Array.size;
+
+// A comment inside a \`bin_op\` is not flattenable, so the whole chain falls back to the source-gap
+// printer rather than being printed with the comment dropped.
+let withComment = alphaBetaGamma + // keep me
+    deltaEpsilonZeta;
+
+// \`#\` must not end a line: a tight \`#\` is a variant tag and a spaced \`#\` is concatenation, so a
+// break beside it is a role change. moc 1.16.0 accepts the break, and tree-sitter reports SAME for
+// all three spellings, so only the printer can refuse it — the line stays long on purpose.
+let concatStaysLong = alphaBetaGammaDelta # deltaEpsilonZetaEta # thetaIotaKappaLambda;
+
+// §2.7: a shift is one token, so it never trails a line either — same refusal, same reason.
+let shiftStaysLong = aaaaaaaabbbbbbbb >> ccccccccdddddddd;
+
+/**
+ * Spacing the author omitted, which the printer normalises.
+ *
+ * The CST **omits a gap when the source had no whitespace there**, so one tree arrives with three,
+ * four or five children depending on how it was spelled — \`1+1\`, \`1 +1\`, \`1+ 1\`, \`1 + 1\`. Measured
+ * with \`.probe/_gapshape.mts\`:
+ *
+ * | source  | children | node kinds                       |
+ * | ------- | -------- | -------------------------------- |
+ * | \`1 + 1\` | 5        | operand, Text, op, Text, operand |
+ * | \`1 +1\`  | 4        | operand, Text, op, operand       |
+ * | \`1+ 1\`  | 4        | operand, op, Text, operand       |
+ * | \`1+1\`   | 3        | operand, op, operand             |
+ *
+ * This walk originally required exactly five and refused the rest, so a glued \`1+1\` fell through to
+ * the source-gap printer. That printer reproduces the source's spaces, and there were none — so the
+ * output stayed \`1+1\` and the printer never normalised operator spacing at all. **No gate could see
+ * it**: the guard compares token texts, and \`shapeOf\` drops \`Text\` nodes, so the four spellings above
+ * are one shape. It surfaced by replaying the 0.13 suite (\`.probe/_legacyreplay.mts\`), where the
+ * full-width chain cases read \`in: "1+1" / exp: "1 + 1\\n"\` — 19 of them went DIFF → PASS once the
+ * short forms were accepted.
+ *
+ * A **comment** in a gap position is still refused: it is a \`Token\` or a \`Branch\`, never a \`Text\`, so
+ * it survives the filter that strips whitespace and breaks the three-part check. The chain then falls
+ * back and keeps the comment *and* the source's own spacing, which is why \`withComment\` above is
+ * unchanged by this fix.
+ */
+
+let glued = 1 + 1;
+
+let gluedLeft = 1 + 1;
+
+let gluedRight = 1 + 1;
+
+let gluedRel = a == b;
+
+// Mixed spellings in one chain, and long enough that the printed form breaks — the break lands after
+// the canonical \`+\`, on a chain whose source had no space around any of them.
+let gluedChain = aaaaaaaabbbbbbbb +
+  ccccccccdddddddd +
+  eeeeeeeeffffffff +
+  gggggggghhhhhhhh;
+"
+`;
+
+exports[`format/expressions/coalesce-chains.mo > prints as snapshotted 1`] = `
+"/**
+ * \`??\` chains: the one chain family that is not a \`bin_exp\`, and the break direction it inherits.
+ *
+ * \`coalesce_exp\` is its own grammar node (\`nodes.generated.ts\`), with two structural differences
+ * from the binary levels \`binary-chains.mo\` covers, both measured with \`.probe/_coalshape.mts\`:
+ *
+ *  - **the spine leans right.** \`a ?? b ?? c\` is \`coalesce_exp(a, coalesce_exp(b, c))\`, the opposite
+ *    of the grammar's no-precedence binary levels, which lean left. A flattener that walks
+ *    \`children[0]\` therefore never sees a \`??\` chain at all.
+ *  - **the operator is a bare \`Token\`, not a \`Branch\`.** A \`bin_exp\` level holds \`Branch bin_op →
+ *    Token "+"\`; this one holds \`Token "?? "\` directly, with the trailing space part of the token
+ *    text. \`exp.ts\`'s \`opText\` requires a \`Branch\` and so reports \`null\`, which is why the coalesce
+ *    walk reads its operator inline rather than through the shared helper.
+ *
+ * Because it is not in \`exp.ts\`'s \`OP_KINDS\`, a \`??\` chain used to fall through every area printer
+ * to the source-gap fallback — which reproduces the source's *spaces*, and a space never breaks.
+ * Measured before the fix (\`.probe/_coal.mts\`): the chain below printed at **101 characters** against
+ * a width of 80. Across the corpus, the 35 files mentioning \`??\` went **72 → 47** over-80 lines.
+ *
+ * The break goes **before** the operator, matching \`|>\` rather than the binary levels. The operator
+ * may not trail a line, and the reason is the guard rather than moc: the lexer's rule is
+ * \`alias(token(/\\?\\?[ \\t\\r\\n]/), "??")\`, so the trailing whitespace is *inside the token*, and
+ * \`verify.ts\`'s \`shapeOf\` compares a token's text exactly. Measured on all four spellings
+ * (\`.probe/_coalverify.mts\`) — \`a ??\\nb\` parses in tree-sitter and moc 1.16.1 reports zero syntax
+ * errors and builds \`NullCoalesceE\`, but the re-parse yields the token \`"??\\n"\` where the input had
+ * \`"?? "\`, so the guard refuses it. That is the correct call: the two are different tokens.
+ */
+
+// Flat and fitting, so it stays flat. This is the half the guard can see — \`line\` flattens to a
+// single space, so the flat rendering is the source's own \`a ?? b ?? c\` and the token texts survive.
+let short = a ?? b ?? c;
+
+// The 101-character case. Each operand lands on its own line, and the run gets one indent for the
+// whole chain rather than one per operator — the same "no nested groups" rule as the binary levels.
+let longChain = aaaaaaaaaaaaaaa
+  ?? bbbbbbbbbbbbbbb
+  ?? ccccccccccccccc
+  ?? ddddddddddddddd
+  ?? eeeeeeeeeeeeeeeee;
+
+// One operator is enough to break: the same correction \`binary-chains.mo\` records for \`planChain\`,
+// where a one-operator chain stayed over \`printWidth\` until the two-operator minimum was removed.
+let singleOperator = proposal_submission_deposit_e8s
+  ?? system_params_reserve_e8s_plus_more;
+
+// No space before the operator. The lexer is \`alias(token(/\\?\\?[ \\t\\r\\n]/), "??")\`, so the
+// whitespace *after* \`??\` is inside the token and mandatory — but nothing requires any *before* it,
+// and the CST omits that gap when the author did. Measured with \`.probe/_coalgap.mts\`: \`a ?? b\` is a
+// four-child level, \`a?? b\` is a **three-child** one, and the two have identical shapes because the
+// operator token reads \`"?? "\` either way. This walk required the four-child form and so fell
+// through to the source-gap printer, exactly as the binary walk did — \`binary-chains.mo\` carries the
+// long-form argument, including why no gate can see the difference.
+let glued = a ?? b;
+
+let gluedChain = aaaaaaaabbbbbbbbbb
+  ?? ccccccccccdddddddddd
+  ?? eeeeeeeeeeffffffffff;
+
+// A \`??\` whose operands are themselves calls that break — the operands' own groups are independent
+// of the chain's, so each breaks on its own width and the \`??\` only breaks when the chain does not fit.
+let callOperands = someVeryLongFunctionName(argumentOne, argumentTwo)
+  ?? someOtherLongFunction(argumentThree, argumentFour);
+
+// Nesting: the source's parentheses are preserved, so the inner chain is a separate \`coalesce_exp\`
+// that the outer walk stops at — it prints as its own group rather than being flattened together
+// with the outer operator, and it fits, so only the outer \`??\` breaks.
+let nested = aaaaaaaaaaaaaaaaaaaaa
+  ?? (bbbbbbbbbbbbbbbbbbbbb ?? ccccccccccccccccccccc ?? ddddddddddddddddddddd);
+
+// A comment inside the level is not flattenable, so the chain falls back to the source-gap printer
+// rather than being printed with the comment dropped — \`planChain\`'s rule, kept identical here.
+let withComment = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ?? // keep me
+    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+
+// \`??\` beside a binary level: the \`coalesce_exp\` is the outer node here, and its right operand is a
+// \`bin_exp\`, so the chain printer takes the \`??\` apart and hands the arithmetic to \`planChain\`.
+let mixedWithBinary = aaaaaaaaaaaaaaaaaaaaaaaa
+  ?? bbbbbbbbbbbbbbbbbbbbbb + cccccccccccccccccccccccc;
+
+// The \`#\` rule from \`binary-chains.mo\` is about \`bin_exp\` operators and does not reach this family;
+// \`??\` has no whitespace-sensitive spelling, so a \`??\` chain containing a \`#\` still breaks normally
+// while the inner \`#\` chain refuses to.
+let withHash = aaaaaaaaaaaaaaaaaaaa # bbbbbbbbbbbbbbbbbbbb
+  ?? cccccccccccccccccccc # dddddddddddddddddddd;
+"
+`;
+
+exports[`format/expressions/construct-coverage.mo > prints as snapshotted 1`] = `
+"/**
+ * Construct coverage: fifteen legacy tests whose subject is a *spelling*, kept as inputs the printer
+ * reproduces.
+ *
+ * ## Where this file comes from
+ *
+ * \`docs/fixture-triage.md\` §"Construct coverage — keep" names the legacy tests that exist to prove a
+ * construct is reachable at all — "does this spelling parse, and does the printer keep it" — rather
+ * than to pin a layout rule. The Misc group's non-paren remainder supplies the rest. The unit is the
+ * construct's *own spelling*: each case below is the legacy input (or, where the legacy input was not
+ * valid Motoko, the construct's real spelling) written so the snapshot records what \`preserve\` does
+ * to it. Fifteen legacy tests, and what became of each:
+ *
+ * - \`type bindings\` → §2
+ * - \`anonymous functions\` → §3
+ * - \`do ? / optional\` → §4
+ * - \`async*\` → §5.1
+ * - \`await*\` → §5.2
+ * - \`function in type bindings\` → §6
+ * - \`case with array value\` → §7
+ * - \`tuple line breaks\` → §8
+ * - \`optional variants\` → §9
+ * - \`variants / text concatenation\` → §10
+ * - \`\` \`with\` keyword \`\` → §11
+ * - \`comma-parentheses\` → §12
+ * - \`emoji in import statement\` → §13
+ * - \`@ symbol\` → **not ported** (§14 says why)
+ * - \`already formatted\` (Misc) → §1, as the plain positive control
+ *
+ * \`shared and query keywords\`, \`logical operators\`, \`pipe operator\` and \`null coalesce operator\` are
+ * in this group by triage but are already ported to \`tests/format/expressions/literals-and-tokens.mo\`
+ * (the token fixtures), so they are deliberately **not** repeated here.
+ *
+ * ## The port criterion, and why twelve of these are \`change\`
+ *
+ * A case is ported when **its output is what the spec asks for**, not when the old test passes.
+ * Where the legacy expectation and the spec disagree the spec wins, and the fixture is written at the
+ * spec's output. For this group the disagreement is almost always the same one: the legacy suite ran
+ * the old line-shaping engine, whose job was to *normalise whitespace inside a construct*, and its
+ * expectations encode exactly that normalisation — \`func foo<A <: Any>(x : A)\`, \`func() : ()\`,
+ * \`do ? {}\`, \`?#abc\`, \`"A" # "B"\`, \`{ a and b with c = d }\`. Every one of those cells changes the
+ * printed *token stream* by re-spacing or by adding/removing a separator, and \`docs/style.md\` rules
+ * that \`preserve\` may not make such a change:
+ *
+ * > \`preserve\` cannot implement those cells, and the reason is not a preference: the runtime guard
+ * > compares the printed token stream against the tree the printer was given, and **a separator is a
+ * > token**. So a \`;\` the printer adds or removes is a difference the guard must reject.
+ *
+ * So the fixture holds the source's own spacing, and the snapshot asserts that the printer left it
+ * alone. Where the printer *does* move something, §11 and §12 adjudicate it, and each of those is a
+ * bracketSpacing or group-break rule the printer owns — not a re-spacing of a token the author wrote.
+ *
+ * ## Measured
+ *
+ * One pass over the exact statements below as ONE program, plus the legacy fragments that were
+ * excluded, in \`.probe/_constructs.mts\` (per-case columns: our parser, four mocs, output, fixed
+ * point); the \`#\` seam is dissected tree-first in \`.probe/_constructs_tree.mts\`; the identity battery
+ * that isolates what the printer actually moves is \`.probe/_constructs_norm.mts\`; and the whole file
+ * as one program is re-verified by \`.probe/_constructs_file.mts\`. The four mocs are \`1.1.0\`
+ * (\`Motoko compiler 1.1.0 (source q8nbql1z-ylg40zah-wmfljwd6-j6bq1lwd)\`), \`rel1.16\`
+ * (\`Motoko compiler 1.16.1 (source cmnnq83c-j64xzf3y-dbl9326w-qfay9xca)\`), \`pin\`
+ * (\`Motoko compiler (source 1.16.1-26-g1d57a4fc7b)\`) and \`v2\`
+ * (\`Motoko compiler 2.0.0-beta.1 (source cm629575-xbjnv6zp-giwd8xzr-q1bsqjv2)\`).
+ *
+ * Result: our parser accepts the whole file, **all four mocs parse it**, and the output is a **fixed
+ * point**. Of the statements below, **five move** and the rest are identity (\`.probe/_constructs_ident.mts\`
+ * formats each statement alone to separate the two); all five are in §11 and §12 and are adjudicated
+ * there — they are the record literal and the \`if\` head, which are the printer's own layout nodes.
+ *
+ * ## Every statement ends in \`;\`
+ *
+ * This file is formatted as ONE program, so two adjacent statements with nothing between them are a
+ * parse error (\`Missing ';'\`). Several legacy inputs are bare fragments (\`async* T\`, \`?#abc\`, \`#a\`,
+ * \`@abc\`) that are not programs; each appears below either inside a complete construct or at a
+ * spelling a moc accepts as a program, and §14 records the ones that had to be dropped.
+ */
+
+// --- 1. \`already formatted\` (Misc): the positive control -------------------------------------------
+//
+// The legacy Misc test asserted that a file already in the printer's shape comes back unchanged. It is
+// the baseline every other section is read against: if this section moves, the others are not being
+// judged against a stable printer.
+//
+// The second import is §13's emoji case. It lives here rather than in §13 because Motoko requires
+// every \`import\` before any other declaration — the moc rejects \`let x = 1; import Prim "…";\` at the
+// \`import\` — so an import statement cannot have its own section further down. Both imports are in the
+// printer's own shape (the second has the double gaps §13 is about) and both are byte-for-byte
+// identity.
+
+import Prim "mo:⛔";
+import  Other  "mo:⛔";
+
+let x = 1;
+let y = 2;
+let z = x + y;
+
+// --- 2. \`type bindings\`: the author's angle spacing is a token gap --------------------------------
+//
+// The legacy expectation normalised both spellings to \`func foo<A <: Any>(x : A)\`. That is two
+// re-spacings at once — a gap inside a type argument list, and a gap before a parameter's type — and
+// neither is a layout choice \`preserve\` may make, because the gap belongs to the source node's
+// children. Our parser accepts both spellings, all four mocs accept both, and each is identity here.
+// The pair is the point: the printer tells them apart instead of collapsing them to one.
+
+func foo<A<:Any>(x:A) {};
+func foo <A <: Any>(x:A) {};
+
+// --- 3. \`anonymous functions\`: an empty parameter list and an empty return type -------------------
+//
+// \`func ():() {}\` and \`func <T> () {}\` are the two spellings the legacy test wanted normalised to
+// \`func() : ()\` and \`func<T>()\`. Both normalisations move tokens, so neither is made; the two below
+// are identity on both engines' *input* but only ours keeps them. \`docs/style.md\`'s function-signature
+// section breaks a signature like TypeScript and adds no trailing comma — it says nothing about
+// inserting a space after \`func\`, which is what the legacy expectation was doing.
+
+func ():() {};
+func <T> () {};
+
+// --- 4. \`do ? / optional\`: the \`do?\` seam is not re-spaced -----------------------------------------
+//
+// Four spellings of the same operator, and the legacy test moved only one of them (\`do?{}\` → \`do ? {}\`).
+// That move inserts a space between two tokens the author glued; \`preserve\` reproduces the source gap
+// instead. \`?{}\` on its own is the optional-block literal, \`do ? {}\` is the explicit form, and the two
+// glued spellings are the same constructs without the gap. All four are identity.
+
+?{};
+do ? {};
+do?{};
+do? {};
+
+// --- 5.1 \`async*\`: the type-level operator, and the bare spelling that is not a program -------------
+//
+// The legacy test's second input, \`async * T\`, is **SYNTAX on all four mocs** and our parser rejects
+// it at \`1:7\` — so there is nothing to port there, and the "normalise to \`async* T\`" expectation is
+// moot (see §14). \`async* T\` as a bare program *does* parse on all four, and the four statements below
+// put the operator where it is actually reachable: a return type, a body containing \`await*\`, a type
+// alias, and a \`shared\` function. All four are identity.
+
+async* T;
+func f5() : async* T {};
+type T5 = async* Nat;
+shared func f5s() : async* T {};
+
+// --- 5.2 \`await*\`: same seam, same result ---------------------------------------------------------
+//
+// The legacy input \`await * t\` is **SYNTAX on all four mocs** and rejected by our parser; the valid
+// spelling is glued, and it is identity both bare and in a body. Together with §5.1 this is the whole
+// content of the two legacy tests once the invalid spellings are removed.
+
+await* t;
+func f5b() : async* T { await* t };
+
+// --- 6. \`function in type bindings\`: a function type as a type argument ----------------------------
+//
+// Both legacy cases are \`expectFormatted\`, and both are identity. The \`() -> ()\` spelling inside the
+// angle brackets is a function type, and its spacing is the author's; the printer does not add a
+// trailing comma or a space around \`->\`. The third legacy spelling, \`type T = <() -> (), Nat>\`, is
+// **SYNTAX on all four mocs** (a bare angle-bracket type is not a type expression) and is not ported.
+
+f6<() -> (), Nat>();
+f6<() -> (), () -> ()>();
+
+// --- 7. \`case with array value\`: a \`case\` pattern with an array body ------------------------------
+//
+// The legacy input is the bare fragment \`case (x) [x];\`, which our parser accepts but which **all four
+// mocs reject as SYNTAX** — a \`case\` clause is not a program. Porting it verbatim would bake a
+// tree-sitter-only spelling into the snapshot and call it printer behaviour; that class of gap belongs
+// in \`docs/grammar-deviations.md\`. The identical seam is exercised below inside a real \`switch\`, where
+// all four mocs accept it, including one nested in a function and one with two array items.
+
+switch y { case (x) [x] };
+switch y { case (x) [x, x] };
+func f7() { switch y { case (x) [x] } };
+
+// --- 8. \`tuple line breaks\`: a tuple that does not fit is already broken ---------------------------
+//
+// The legacy test built a 5x20-character tuple and asserted the broken form came back unchanged; the
+// tuple is over \`printWidth\` (80) with no hope of joining, so it is identity. It is the group's one
+// hard-break control: the printer must keep the break the source has.
+
+(
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+);
+
+// --- 9. \`optional variants\`: \`?\` and a tag are not separated by a space the printer may add -------
+//
+// \`?#abc\` is \`expectFormatted\` (identity) and the legacy test normalised \`? #abc\` → \`?#abc\`. That is
+// the same token-gap move as §4, in the other direction, and it is not made here. Both spellings are
+// accepted by our parser and all four mocs, and both are identity; the \`let\` binding is the third
+// spelling, in expression position.
+
+?#abc;
+? #abc;
+let v9 = ?#abc;
+
+// --- 10. \`variants / text concatenation\`: the \`#\` seam, tree-first ---------------------------------
+//
+// Nine legacy inputs, of which two are **SYNTAX on all four mocs** — \`# "A"\` and \`# 5\` — because a bare
+// \`#\` with a space and no left operand is not a program; they are the tag-vs-concatenation hazard from
+// \`docs/adjacency.md\` §2.6 and are not ported (§14). The seven that parse are below, and the section
+// is the sharper half of the invariant: the legacy expectation force-spaced every tight \`#\` (\`"A"# b\`
+// → \`"A" # b\`, \`"A"#"B"\` → \`"A" # "B"\`), and this printer does not, because the gap is a token gap.
+//
+// \`docs/adjacency.md\` §2.6 reads a tight \`#\` as a *variant tag* when what follows is a tag, which is
+// why normalising it would change the program. \`.probe/_constructs_tree.mts\` measured what moc
+// actually does with the same bytes, and the finding is recorded in §15: for the spellings below,
+// tight \`#\` is read as concatenation on all four mocs, not as a tag. The printer's refusal to
+// normalise is therefore conservative — safe, and not what the legacy engine did — and the fixture
+// pins the refusal either way.
+
+#a;
+"A" # b;
+"A" # #b;
+"A"# b;
+"A"#"B";
+"A"# #b;
+"A" #
+"B";
+
+// --- 11. \`with\` keyword: adjudications 1-4 --------------------------------------------------------
+//
+// The only section in the file where the printer moves the source, and every move is a rule it owns.
+//
+// The legacy test's four cases each *broke* the multi-line spellings into an indented list. None of
+// them fits that shape: \`{ a and b with c = d }\` is a record literal the printer lays out, and
+// \`docs/style.md\` §"Blocks, records, object types: one line vs broken" puts it on one line when it
+// fits and has no hard break of its own — so the source breaks are *joined*, not reproduced, and the
+// legacy multi-line expectation is not what the spec asks for.
+//
+// The bracket spacing is the second move: \`{a and b with c = d}\` → \`{ a and b with c = d }\`. That is
+// style.md's Conflict ruling 1 (\`bracketSpacing\` defaults on) applied to a record literal — the same
+// positive control as \`tests/format/expressions/parens-heads-and-seams.mo\` §"Record extension". The
+// \`;\` separators inside \`c = d; e = f;\` are the author's and are kept; no trailing separator is added.
+//
+// The four statements below are the legacy test's own inputs, at the source spellings; the snapshot
+// records the joined, re-spaced output, which is what the spec asks for. All four move: the first by
+// the bracket spacing alone, the three broken ones by the join as well. Together with the broken \`if\`
+// head in §12 these are the file's **five** moved statements (\`.probe/_constructs_ident.mts\`).
+
+{ a and b with c = d };
+{ a and b with c = d };
+{ a and b with c = d };
+{ a and b with c = d; e = f; };
+
+// --- 12. \`comma-parentheses\`: adjudication 5 ------------------------------------------------------
+//
+// One statement, two moves against the legacy expectation. The legacy output was \`if (\\n  x\\n) { y };\`:
+// it inserted a space after \`if\`, broke the head across three lines, and appended a \`;\`. The printer
+// makes none of those. \`if\` and its head are glued (\`preserve\` keeps the source gap, and there is
+// none); the head fits on one line with no hard break, so it is joined; and the \`;\` is a separator the
+// source does not have, so it cannot be invented. The pair below is the joined and the broken-in-source
+// spelling of the same head; both print as \`if(x) { y };\`.
+
+if(x) { y };
+if(x) { y };
+
+// --- 13. \`emoji in import statement\`: a multi-byte token is still one token -----------------------
+//
+// The legacy expectation collapsed the double spaces: \`import  Prim  "mo:⛔";\` → \`import Prim "mo:⛔";\`.
+// That is a re-spacing of the source's own gaps, so it is not made; the emoji itself is the subject,
+// and it survives byte for byte. The \`mo:\` prefix plus the emoji is the standard package locator and
+// the printer never touches a string literal's text — the same rule as \`literals-and-tokens.mo\`'s
+// multi-line-text section, on a single-line literal.
+//
+// The statement itself is the second import in §1: Motoko requires every \`import\` before any other
+// declaration, so this case cannot sit in its own section below the \`let\`s. The legacy test's second
+// half, \`format('import  Prim  "mo:⛔";'.repeat(100))\`, is not ported: it parses on all four mocs, which
+// reject it *past* the parser as a duplicate binding (\`M0017\` on \`rel1.16\`, \`pin\` and \`v2\`; \`M0051\` on
+// \`1.1.0\`), but it is the same statement 100 times over, so it adds no coverage a single import does
+// not already have.
+
+// --- 14. \`@ symbol\`: NOT PORTED — the spelling is not Motoko --------------------------------------
+//
+// The legacy test asserted \`format('@abc') === '@abc\\n'\`. Measured: our parser **REJECTS** \`@abc\`,
+// \`let x = @f();\` and \`func @add_cycles<system>() {};\` (all at the \`@\`), and **all four mocs report
+// SYNTAX** on all three. \`docs/grammar-deviations.md\` §5 already rules on this exact gap: the
+// grammar's \`privileged_identifier: $ => seq("@", $.identifier)\` at \`grammar.js:403\` is unreachable,
+// and a \`.mo\` file containing \`@\` must be a **hard, reported failure** rather than a formatted result.
+// \`docs/fixture-triage.md\` §"The refusals, measured" reaches the same verdict — \`@ symbol\` is a
+// **delete**. There is no output to snapshot, so there is no fixture line.
+//
+// For the same reason \`async * T\` and \`await * t\` (§5.1, §5.2), \`type T = <() -> (), Nat>\` (§6),
+// \`# "A"\` and \`# 5\` (§10), and the bare \`case (x) [x];\` (§7) do not appear: each is SYNTAX on all four
+// mocs, and that class of gap belongs in \`docs/grammar-deviations.md\`, not in a fixture.
+
+// --- 15. Finding, not acted on: the tight \`#\` is concatenation everywhere it was measured ---------
+//
+// The fixture above pins the printer's *refusal* to normalise a tight \`#\`, and \`docs/adjacency.md\`
+// §2.6 justifies the refusal by reading a tight \`#\` as a variant tag. \`.probe/_constructs_tree.mts\`
+// dumps the normalized tree for the tight spellings and finds \`bin_exp_object\` with \`bin_op "#"\` in
+// every case — tree-sitter reads \`"A"#"B"\`, \`"A"# b\` and \`"A"#b\` as concatenation, and so do all four
+// mocs (\`CatOp\` in \`-dp\`, and all four type-check the \`Text\` result). So for these operands the
+// refusal is conservative rather than required: a printer that normalised them would not change the
+// program, whereas the spec's §2.6 rule is stated for the tag case where it would. This is a finding
+// about the printer's conservatism, not a bug to fix, and it is left as measured.
+"
+`;
+
+exports[`format/expressions/literals-and-tokens.mo > prints as snapshotted 1`] = `
+"/**
+ * Literals, identifiers and the operator spellings that are pure syntax: nothing here changes shape.
+ *
+ * ## Where this file comes from
+ *
+ * Six legacy tests — \`scientific notation literals\`, \`multi-line text\`, \`hexadecimal notation\`,
+ * \`exponential notation\`, \`identifier tokens\`, \`quote literals\` — hold 21 cases, and four more
+ * (\`logical operators\`, \`pipe operator\`, \`null coalesce operator\`, \`shared and query keywords\`) are
+ * single spellings of the same kind. All of them are \`expectFormatted\` or near it: the input is
+ * already canonical, so the assertion is that the printer leaves the *token* alone.
+ *
+ * Measured in one pass (\`.probe/_literals.mts\`): **29 PASS, 0 DIFF, 2 THROW**. This file is those 29.
+ *
+ * ## Why this is a fixed-point fixture and not a formatting one
+ *
+ * A literal is one token, so there is nothing for the printer to lay out — except that a \`"\` string
+ * may span lines, and a hexadecimal or exponent literal may carry an underscore or a sign that a naive
+ * printer would normalise away (\`0xF_F\` must not become \`0xff\`, \`1.e1\` must not become \`1.0e1\`). That
+ * is the whole content of the file: **the printer reproduces literal text byte for byte**. The
+ * \`expectFormatted\` shape is what makes the test readable — the input and the snapshot are the same
+ * bytes, so any diff in review is a defect and not a layout choice.
+ *
+ * \`multi-line text\` is the case worth reading twice. A \`"\` literal containing newlines is *one token*
+ * whose text contains them, and the printer must reproduce it exactly rather than re-indenting it —
+ * including the leading spaces on its continuation lines and the blank lines inside it. The last case
+ * in that section is a string whose content is \`{\\n};\`, which is here because it is the input most
+ * likely to be mistaken for Motoko code by anything that scans the file rather than parsing it.
+ *
+ * ## The two refusals
+ *
+ * \`exponential notation\`'s \`.1e1\` and \`invisible unicode characters\`'s zero-width space are **not
+ * Motoko**: \`moc\` 1.16.1 and 2.0.0-beta.1 both reject them, and so does our own parser. They are
+ * \`delete\` for the same reason as the pile in \`docs/fixture-triage.md\` §"The refusals, measured" — the
+ * old engine accepted them because it shaped lines rather than parsing.
+ */
+
+// --- Scientific and exponential notation ----------------------------------------------------------
+//
+// The three forms that differ in where the sign and the fraction sit. \`1.7976931348623157e+308\` is
+// \`Float\`'s maximum, so a printer that parsed the literal into a number and printed it back would
+// round it here.
+
+let s1 = 1e2;
+let s2 = -1e-2;
+let s3 = 1.7976931348623157e+308;
+
+let e1 = 1e1;
+let e2 = 1e-1;
+let e3 = 1.e1;
+
+// --- Hexadecimal notation -------------------------------------------------------------------------
+//
+// The underscore is a digit separator and the case of \`F\` is the author's, not the printer's. All five
+// spellings must survive as written.
+
+let h1 = 0xf;
+let h2 = 0xF;
+let h3 = 0xf_f;
+let h4 = 0xF_f;
+let h5 = 0xF_F;
+
+// --- Identifier tokens that look like numbers -----------------------------------------------------
+//
+// \`x.0.e0x\` is member access with numeric field names, not a float. The second line is the same
+// expression with a trailing \`x\`, which is a separate declaration rather than part of the literal —
+// the pair is here because a printer that tokenised greedily would merge them.
+
+x.0.e0x;
+
+x.0.e0 x;
+
+// --- Multi-line text ------------------------------------------------------------------------------
+//
+// One token spanning lines. The printer reproduces it exactly, so the leading spaces on continuation
+// lines and the blank lines inside the string are all preserved. The last case's content is \`{\\n};\`,
+// which is deliberately Motoko-shaped text inside a string.
+
+"A
+B";
+
+"  A
+  B";
+
+"A
+
+B";
+
+"A
+
+  B";
+
+"
+A
+
+  B
+    ";
+
+"
+
+{
+};
+
+";
+
+// --- Quote literals and the two-character operators -----------------------------------------------
+//
+// \`'a'\` is a character-ish quote literal and \`"a"\` a string; \`|>\`, \`??\`, \`and\`, \`or\`, \`not\` are all
+// token spellings with no layout of their own. \`shared query func\` is included because the modifier
+// order is fixed and a printer must not reorder it.
+
+'a';
+
+"a";
+
+A and B;
+
+A or B;
+
+not A;
+
+A |> f;
+
+a ?? b;
+
+a ?? b ?? c;
+
+shared query func f() : async () {};
+"
+`;
+
+exports[`format/expressions/member-chains.mo > prints as snapshotted 1`] = `
+"/**
+ * Member chains: which link owns the break, and the two spines this module refuses.
+ *
+ * \`docs/style.md\` §"Member chains" asks for one \`.\`-link per line, broken **before** the \`.\`, once a
+ * chain does not fit — the same shape and direction the \`|>\` pipeline rule uses. The source-gap
+ * printer this area replaced could not produce it, and its failure was worse than a long line: a call
+ * link's own \`par_exp\` is a breakable list, so it was the only break candidate under the node and the
+ * chain broke *inside* the argument list instead. \`breakAtArguments\` is that shape as a single call,
+ * and \`defectCase\` is the one that moved a break to the wrong side of a \`.\`.
+ *
+ * Every case is written in the spelling least like the answer, so the snapshot records the printer's
+ * decision rather than the source's layout. The last section is the interesting half: \`chain.ts\`
+ * refuses a receiver that is itself a call, and *composes* with a number projection, and the two are
+ * different outcomes for a reason the header of \`src/printer/chain.ts\` spells out.
+ *
+ * ## Why every case is \`let x = <chain>;\`
+ *
+ * A bare expression statement would be an \`exp_dec\`, and its own \`;\` is a source-file-level sibling
+ * rather than part of the chain — so a chain printed as a declaration adds a token this fixture would
+ * then be asserting. Binding it with \`let\` keeps the chain the only thing under test.
+ */
+
+// The style guide's own worked example, written flat: seven calls, seven links, far over
+// \`printWidth\`. Every \`.\` takes a line at one indent level, and the receiver stays on the \`let\` line.
+let workedExample = x
+  .repeat(50)
+  .repeat(50)
+  .repeat(50)
+  .repeat(50)
+  .repeat(50)
+  .repeat(50)
+  .repeat(50);
+
+// The old test from \`tests/legacy/formatter.test.ts\`, which is the only concrete evidence for the
+// threshold and is why it is a count of *links* and not of calls: these are two dots and **no calls
+// at all**, and both break. A threshold of "more than two calls" would refuse the very case
+// \`docs/style.md\`'s ruling cites, which is the trap the header documents.
+let twoDotsNoCalls = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  .xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  .xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx;
+
+// The defect this area exists for. Before the chain printer, the source-gap fallback found the
+// \`par_exp\` under \`.someVeryLong…(aLongArgumentHere)\` — the only break candidate — and produced
+// \`).bar(\\n  1\\n)\`: a break between a call and the argument list that *follows* it, which is neither
+// shape the rule allows. Now the break belongs to each \`.\` and the field link takes a line of its own.
+let defectCase = x
+  .field
+  .someVeryLongFunctionNameThatIsQuiteLongIndeed(aLongArgumentHere)
+  .bar(1);
+
+// Two calls, which the rule's prose reads as "two or fewer" and therefore exempt: it says such a
+// chain "breaks at the arguments instead". Written flat and over \`printWidth\`, this printer still
+// lays it out one link per line, and the snapshot records that on purpose — the prose's count is not
+// the threshold, \`twoDotsNoCalls\` is. See the header for why the weaker reading wins.
+let twoCalls = someLongReceiverNameHere
+  .alphaBetaGammaDelta(someLongArgumentName)
+  .epsilonZetaEtaTheta(1);
+
+// A field-only chain: no \`call_exp\` link at all, and the *same* spine walk — \`children[0]\` bottoms out
+// on a \`var_exp\` here and on a \`call_exp\` in \`workedExample\`, which is why the receiver is stored
+// whole and handed to the shared printer rather than reconstructed.
+let fieldOnly = someVeryLongReceiverNameHere
+  .alphaBetaGammaDelta
+  .epsilonZetaEtaTheta
+  .iotaKappaLambdaMu;
+
+// Below the floor: one link, so there is no chain rule to apply and no break to make. It fits, so the
+// flat form — which is the source's own text character for character — is the fixed point.
+let shortChain = x.foo(a).bar(b);
+
+// The style guide's counter-example: "A chain with two or fewer calls does not use the chain rule at
+// all, even when it overflows \`printWidth\`: it breaks at the arguments instead." This is one call, so
+// the module never sees it and the \`par_exp\` breaks itself — the layout the rule asks for.
+let breakAtArguments = xs.map(func (x : Nat) : Nat { return x + 1; });
+
+// A chain that fits stays flat, including one with a break in the source before the \`.\`: the printed
+// form is the source's own text with the gap dropped, so it is a fixed point.
+let spacedSource = someLongReceiverNameHere
+  .alphaBetaGammaDelta(a)
+  .epsilonZetaEtaTheta(b);
+
+// A receiver that is itself a call is refused — \`planChain\` leaves a link's name unfilled when a
+// \`call_exp\`'s callee is not a \`dot_exp\`, and an unfilled name would print \`.undefined\`. Refusing puts
+// the node back on the source-gap fallback, which is *correct* and merely unbroken; the fallback's
+// recursion still reaches the receiver's \`par_exp\`, so \`f(\` takes its own break and the rest runs long.
+let receiverIsACall = f(
+  a
+).alphaBetaGammaDelta().epsilonZetaEtaTheta().iotaKappaLambdaMuNuXiOmicronPiRho();
+
+// A number projection is **not** refused, and the difference is worth recording. \`x.1\` is a
+// \`proj_exp\`, not a \`dot_exp\`, and it sits at the *top* of the spine — so this module is called on the
+// \`proj_exp\`, refuses it, and the fallback prints its children: the inner chain, which this module
+// *does* own, and then the projection glued to it. The last link therefore reads \`.epsilonZetaEtaTheta.1\`
+// with no break before the \`.1\`, and that is the fallback's decision rather than this module's.
+let projected = someVeryLongReceiverNameHere
+  .alphaBetaGammaDelta(aLongArgument)
+  .epsilonZetaEtaTheta.1;
+
+// A chain nested inside an argument sits inside a link's own \`par_exp\` and does not disturb the spine,
+// so the outer chain's break and the argument's break are independent.
+let nestedInArgument = outerFunction(
+  innerObject.someLongMethodName(anotherArgument).andAnotherMethod(1)
+).call();
+
+// An \`array_idx_exp\` head: the walk bottoms out on the index rather than a \`var_exp\`, which is the
+// point of terminating on an unknown *kind* instead of asserting a receiver shape.
+let indexedHead = someLongArrayNameHere[0]
+  .alphaBetaGammaDelta(a)
+  .epsilonZetaEtaTheta(b)
+  .iotaKappaL(1);
+"
+`;
+
+exports[`format/expressions/operator-spacing.mo > prints as snapshotted 1`] = `
+"/**
+ * The \`+\`/\`-\`/\`*\`/\`/\`/\`^\` seams: what \`preserve\` does with the space the source did, and did not, write.
+ *
+ * ## Where this file comes from
+ *
+ * The legacy suite (\`tests/legacy/formatter.test.ts\`) splits these seams across four separate tests —
+ * \`unary operators\`, \`unary / binary operators\`, \`multiplication and division spacing\`,
+ * \`addition vs. positive number\`, \`subtraction vs. negative number\`. Between them they hold 27
+ * replayable cases, and all 27 already print correctly through this printer (\`.probe/_tally.mts\`, and
+ * the per-case output in \`.probe/_adj.mts\`). So this fixture is that whole group moved into one file
+ * at the source's own spelling: every expression below is a legacy input verbatim, and the snapshot
+ * is the assertion that the printer still does what the group always asked for.
+ *
+ * ## The rule it asserts, and why the two halves are both here
+ *
+ * \`docs/adjacency.md\` §3 owns the \`-\` seam and reaches the sharpest result in that document: of the
+ * four spellings of "minus one" after a head, only one parses on all three compilers. The printer's
+ * job is therefore *not* to normalise \`-\` away. It is to give a **binary** operator its spaces and to
+ * leave a **unary** sign glued to its operand — and those two jobs pull in opposite directions on the
+ * same character, which is why a printer that only knew one of them would pass half of this file.
+ *
+ * So the fixture deliberately holds both directions:
+ *
+ *   - \`1+1\` → \`1 + 1\`. The source left the space out; both parses and both meanings agree, so
+ *     supplying it is free and the style guide asks for it.
+ *   - \`x - +1\` → unchanged. Here the \`+\` is unary. A normaliser that treated every \`+\` as binary
+ *     would emit \`x - + 1\`, which is a subtraction of a spaced \`+ 1\` — and on 1.16.1 that spelling
+ *     does not parse at all (adjacency.md's \`br-neg-space\` row).
+ *
+ * The pair is the whole rule. Either half alone is passed by a printer that is wrong about the other.
+ *
+ * ## Why \`verify.ts\` is what makes the second half enforceable
+ *
+ * A wrong bend here is not a layout preference, it is a different program. The runtime guard compares
+ * the printed token stream against the tree the printer was given, so collapsing \`x - +1\` into
+ * \`x - + 1\` is a hard failure at format time rather than a snapshot someone has to notice. That is why
+ * the cases below are worth pinning even though most of them are byte-for-byte identity: they are the
+ * cheap regression test for a guard that is doing real work.
+ */
+
+// --- Binary seams: the source omitted a space and the printer supplies it -------------------------
+//
+// Every line is the same seam: two operands and an operator the source wrote tight. \`1*1\` and \`1 * 1\`
+// are the same tree, so normalising costs nothing and the style guide asks for it.
+
+1 + 5;
+1 + 1;
+1 + 1.0;
+x + 1;
+x + 1.0;
+1 * 1;
+x * 1;
+1 / 1;
+x / 1;
+1 - 1;
+1.0 - 1.0;
+x - 1;
+x - 1.0;
+
+// The same seam written the *other* way round: the space is before the sign, not after it. \`1 +1\` is
+// still one plus one — \`+\` is binary here, not unary — so the printer is free to print \`1 + 1\`, and
+// does. This is the pair that shows the rule is about the operator's *arity*, not its spelling: the
+// source wrote \`+1\` tight and the printer still spaces it, because it read a binary \`+\`.
+1 + 1;
+x + 1;
+1 - 1;
+x - 1;
+
+// \`1./+5\` is the case that a naive rewrite gets wrong twice over. The \`.\` closes the float literal
+// \`1.\` (not a member access), and the \`+\` is unary. The printer emits \`1. / +5\` — the binary space
+// between the operands, and the unary \`+\` still glued to its \`5\`.
+1. / +5;
+
+// --- Unary seams: the gluing is load-bearing, so it is preserved ----------------------------------
+//
+// A run of unary operators. \`-+5\` is minus applied to plus applied to \`5\`; respacing it as \`- + 5\`
+// would be a subtraction of a positive literal, which is a different tree with a different meaning.
+// All of these are identity cases, and \`^ ^ a\` is the one that is not even tight — the printer keeps
+// the source's own gap rather than choosing one.
+
+-+5;
++-a;
++ - ^5;
+^ ^a;
+^ ^ a;
+
+// --- Unary signs after a head: the cases that must not be bent ------------------------------------
+//
+// The \`+\`/\`-\` here sits where a binary operator could also sit, so getting it wrong silently changes
+// the parse rather than failing loudly. \`x+ -1\` is the tight form of "x plus negative one"; \`x - +1\`
+// is its mirror. Both keep the unary sign glued.
+x + -1;
+x - +1;
+
+// An argument, an index position, and a return: three more heads a unary sign can follow. \`x(+1)\` and
+// \`x(-1)\` are calls whose argument is a signed literal; bending either would turn the sign into a
+// binary operator against a missing left operand.
+x(+1);
+x(-1);
+return +1;
+return -1;
+
+// The statement-boundary case. The \`+\` opens a *second* statement, so it is not continuing \`x\` — and
+// reading it as a binary \`+\` across the \`;\` is exactly the mistake this line exists to catch. The
+// printer keeps them on separate lines.
+x;
++1;
+"
+`;
+
+exports[`format/expressions/parens-heads-and-seams.mo > prints as snapshotted 1`] = `
+"/**
+ * Parens, heads and the seams where a bracket is *not* a layout choice.
+ *
+ * ## Where this file comes from
+ *
+ * Three legacy tests, grouped by \`docs/fixture-triage.md\`:
+ *
+ * - \`conditional parentheses\` (triage: **change** — "the highest-value test in the whole suite after
+ *   the adjacency group"). Its four cases are below. The legacy expectation happens to be identical
+ *   to the input for all four, and so is ours, but the *reason* has changed: the old engine kept
+ *   them by not touching the parens, and this one keeps them because \`preserve\` has no rule that
+ *   could remove them — see "why \`preserve\` cannot drop a paren" below.
+ * - \`dot after group\` and \`tuple indices\` (triage: keep — "whitespace adjacency and operators, the
+ *   safety core"), with \`docs/adjacency.md\`'s table winning wherever the two disagree. The two
+ *   disagreements are the first two adjudications below.
+ * - \`parenthesized \\\`with\\\` expression prefixes\` and \`no delimiter for record extension\` (triage:
+ *   keep), the latter as the positive control for a bracket that *is* re-spaced.
+ * - \`wildcard identifier\` (triage group: construct coverage). The legacy test is eight fragments;
+ *   four spell a \`case\`/\`catch\` clause with no \`switch\` around it, which no moc accepts as a
+ *   program. See "the four fragments".
+ *
+ * ## Measured
+ *
+ * One pass (\`.probe/_parensfinal.mts\`) over the exact 25 statements below: our parser accepts every
+ * one, all four mocs parse every one (the \`moc\` column reads \`TYPE\`, i.e. it got past the parser to
+ * the typechecker), and **every one is a fixed point**. Three outputs are not the input, and each is
+ * adjudicated below: two are legacy \`DIFF\`s whose legacy expectation the spec overrides, and the
+ * third is the deliberate re-spacing of a record literal.
+ *
+ * ## Every statement ends in \`;\`
+ *
+ * This file is formatted as one program, so two adjacent statements with nothing between them are a
+ * parse error — \`Missing ';'\`. The legacy tests formatted one fragment at a time and could elide
+ * it; here it is load-bearing. The first draft of this fixture omitted them and failed to parse,
+ * which is the sort of thing a snapshot would have happily recorded as printer behaviour.
+ *
+ * ## The four fragments, and why they are not ported verbatim
+ *
+ * The legacy \`wildcard identifier\` test asserts four outputs for the bare fragments \`case _ (i)\`,
+ * \`case _ [i]\`, \`catch _ (i)\`, \`catch _ [i]\`, each expecting the fragment back unchanged. Measured:
+ * our parser **accepts** all four (so the fixture would snapshot fine) but **all four mocs reject
+ * them as SYNTAX** — a \`case\` or \`catch\` clause is not a program. Porting them would bake a
+ * tree-sitter-only spelling into a snapshot and call it printer behaviour;
+ * \`docs/grammar-deviations.md\` is where that class of gap belongs. The *identical* seam is
+ * exercised below inside a real \`switch\`, where all four mocs accept it: \`switch x { case _ (i) 1 }\`.
+ *
+ * ## Why \`preserve\` cannot drop a paren
+ *
+ * \`docs/formatter-rework.md\` states the flat-precedence finding: the printer may never add or remove
+ * parens around operators. That is a property of \`preserve\` rather than a check the printer
+ * performs — a parenthesised expression is a \`par_exp\` node with a \`(\` token child, and a separator
+ * or delimiter is a token, which \`preserve\` reproduces rather than invents. So \`if a (b)\` stays
+ * \`if a (b)\` and \`if (a) (b)\` stays \`if (a) (b)\`: the parens are the author's and the printer's job
+ * is to not lose them. \`tests/adjacency.test.ts\` item 1 (paren-wrap a compound head) is the
+ * complementary \`moc2\` rewrite and is deliberately *not* implemented here.
+ *
+ * ## The adjudications
+ *
+ * Cases whose legacy expectation is **not** the output the spec asks for. Each is a \`DIFF\` in the
+ * probe and each is written below as the correct output:
+ *
+ * 1. \`(\\n\\n\\n).0\` -> \`(\\n\\n).0\`. A run of blank lines collapses to one. The blank survives at all
+ *    because the construct already spans lines, so the "one line" rule does not apply to it.
+ * 2. \`(\\na\\n).0\` -> \`(a).0\`. Fits \`printWidth\`, has no hard break of its own, so it goes on one line
+ *    (\`docs/style.md\` §"Blocks, records, object types: one line vs broken"). The legacy expectation
+ *    re-indented it across lines *and appended a \`;\`* the source does not have.
+ * 3. \`0.\\ny\` -> \`0.\\ny\`. \`0.\` is a single \`int_literal\` token, so the source break is inside the
+ *    node's children and is reproduced. The legacy expectation added a statement \`;\` that
+ *    \`preserve\` cannot invent — the same un-inventable-separator reason as the rest of the port.
+ * 4. \`_ (i)\` and \`_ [i]\` -> unchanged. The gap is the general \`call_exp\`/\`idx_exp\` seam, not a
+ *    wildcard rule: \`f  (i)\` is preserved too (measured, \`.probe/_seam.mts\`), which is what shows
+ *    the behaviour is the seam and not the wildcard. The legacy expectation closes the gap; ours
+ *    would have to *invent* a rule for one callee spelling and not another.
+ *
+ * The controls for 1–2 are \`().0\` and \`x.0.y\`: identical in both engines, so the DIFFs are the
+ * group-break rule and not a changed tuple-index rule.
+ */
+
+// --- Conditional parentheses: the author's parens survive ------------------------------------------
+//
+// Four spellings of the same question — is the head parenthesised, is the branch? — and all four are
+// fixed points. The pair is the point: \`if (a) b\` and \`if a (b)\` differ only in *which* side carries
+// the parens, and neither is normalised into the other.
+
+if a b;
+
+if (a) b;
+
+if a (b);
+
+if (a) (b);
+
+// --- A dot after a group ---------------------------------------------------------------------------
+//
+// \`().0\` and \`x.0.y\` are the controls: both engines agree, so anything that moves below is the
+// group-break rule and not the tuple-index rule.
+
+().0;
+
+x.0.y;
+
+// Adjudication 1. This is the one case here whose output differs from its input by *removing*
+// something, and what it removes is whitespace, which the AST guard cannot see.
+
+(
+
+).0;
+
+// Adjudication 2. Broken in the source, but it fits on one line and has no hard break of its own,
+// so it is joined. The parens are kept because they are tokens; only the text inside is re-laid.
+
+(a).0;
+
+// --- Tuple indices ---------------------------------------------------------------------------------
+//
+// A numeric field name is not a float. \`0. y\` keeps its space (the dot binds \`0.\` and \`y\` is a
+// separate token) and \`0.\\ny\` keeps its break for the same reason — adjudication 3.
+
+0. y;
+
+0.
+y;
+
+// --- A wildcard callee, and the seam that is not about wildcards -----------------------------------
+//
+// The first two are the legacy \`expectFormatted\` cases. The next two are the legacy DIFFs, kept
+// exactly as written because the gap is the general call/index seam — adjudication 4. The final pair
+// is the legacy \`case\`/\`catch\` spelling moved inside a real \`switch\`, where all four mocs accept it.
+
+_(i);
+
+_[i];
+
+_ (i);
+
+_ [i];
+
+switch x { case _ (i) 1 };
+
+switch x { case _ [i] 1 };
+
+// --- \`with\` expression prefixes --------------------------------------------------------------------
+//
+// A parenthesised \`with\` prefix keeps its parens and its internal \`;\` separators for the same token
+// reason. The two broken spellings show the group's own break is reproduced when the source already
+// spans lines, rather than being forced back onto one.
+
+(with a = 1) actor {};
+
+(with a = 1; b = 2) actor {};
+
+(m with a = 1) actor {};
+
+(m with a = 1; b = 2) actor {};
+
+(m with a = 1)
+actor {};
+
+(with a = 1)
+actor {};
+
+(
+  m with
+  a = 1;
+  b = 2;
+)
+actor {};
+
+// --- Record extension: the positive control --------------------------------------------------------
+//
+// This bracket *is* re-spaced — \`{base with a = 1}\` becomes \`{ base with a = 1 }\` — because a record
+// literal is a list node the printer lays out. It is here so the file does not read as "brackets are
+// never touched": they are, wherever the printer owns the construct. Note there is no \`,\` before
+// \`with\` and no \`;\` after it, and neither is invented.
+
+{ base with a = 1 };
+"
+`;
+
+exports[`format/imports/comment-in-section.mo > prints as snapshotted 1`] = `
+"/// Comments belong to the import section, not to the code below it. The header comment above the
+/// imports and the note glued to the last one are both part of "the imports", so the blank goes
+/// before \`actor\` — and *not* before the commented-out import in the middle, which is the case that
+/// distinguishes "the section is the leading run of imports and comments" from "the section ends at
+/// the first thing that is not an import".
+//
+// The commented-out third import is the point of this file; do not "fix" it.
+import A "A";
+// import B "B";
+import C "C";
+
+actor {};
+
+// A note that the source separated from the section with a blank line of its own. That blank is
+// the author's, and the rule keeps it — the section's blank is not added on top of it.
+object Tail { public let x = 1; };
+"
+`;
+
+exports[`format/imports/extra-blanks.mo > prints as snapshotted 1`] = `
+"/// The import section, already canonical, with a blank line inside the run and two after it. Both
+/// collapse to one: the section's own blank goes where \`docs/style.md:114-130\` puts it, and the
+/// ordinary "at most one blank" rule handles the rest.
+import A "A";
+
+import { B; C } "BC";
+
+actor {};
+"
+`;
+
+exports[`format/imports/glued-section.mo > prints as snapshotted 1`] = `
+"/// The import section, glued: the source wrote no blank line after the last import, and the rule
+/// wants exactly one. This is the case the printer *invents* a blank for, and the one that makes
+/// the rule an exception to "a blank line is never invented" (\`docs/style.md:114-130\`).
+import A "A";
+import B "B";
+
+actor {};
+"
+`;
+
+exports[`format/imports/no-imports.mo > prints as snapshotted 1`] = `
+"/// A file with no imports at all: the rule asks for no leading blank line, and a leading one in the
+/// source is dropped by the ordinary blank-line rule rather than kept. The contrast with
+/// \`glued-section.mo\` is the whole assertion — this file's first line is a declaration, not an
+/// import, so nothing is invented.
+let x = 1;
+
+let y = 2;
+"
+`;
+
+exports[`format/layout/blank-lines-and-groups.mo > prints as snapshotted 1`] = `
+"/**
+ * Blank lines, and the layout of a group that fits on one line versus one that breaks.
+ *
+ * ## Where this file comes from
+ *
+ * The ten Layout cases \`docs/fixture-triage.md\` lists under "Layout — keep, but beware", minus the
+ * two already ported into \`tests/format/layout/whitespace-and-brackets.mo\`:
+ *
+ * | legacy test                       | below? | verdict                                                                 |
+ * | --------------------------------- | ------ | ----------------------------------------------------------------------- |
+ * | \`empty block\`                     | yes    | **change** — the legacy \`;\` is not invented; the blank is kept, not made |
+ * | \`extra newlines\`                  | yes    | keep                                                                    |
+ * | \`group spacing\`                   | yes    | keep (with one reading made explicit)                                    |
+ * | \`nested group line breaks\`        | yes    | **change** — the outer group breaks too                                  |
+ * | \`tuple line breaks\`               | yes    | keep (identity)                                                          |
+ * | \`anonymous function line break\`   | yes    | **change** — it fits, so it joins                                        |
+ * | \`if-else wrapping\`                | yes    | **change** — it fits, so it joins; the legacy \`;\` is not invented        |
+ * | \`type binding line breaks\`        | no     | not portable — the legacy source is not a program (below)                |
+ * | \`lines before/after group\`        | half   | the default-option half only (below)                                     |
+ * | \`block with existing newline\`     | yes    | **change** — it fits, so it joins                                        |
+ * | \`extra whitespace\`, \`bracket spacing\` | no | already in \`whitespace-and-brackets.mo\`                                  |
+ *
+ * ## The rule, from \`docs/style.md\`
+ *
+ * **§Blank lines.** "At most one consecutive blank line in the output, and the printer never invents
+ * one. Runs of two or more blanks collapse to one." The document names its own two cases, and both
+ * are below: \`format('a;\\n\\n\\n\\n\\nb')\` → \`'a;\\n\\nb;\\n'\`, and the same run next to a comment.
+ *
+ * **§Blank lines inside bodies.** "Kept as written, up to one." That is what decides the surprising
+ * half of this file: a blank line is *kept* when the construct it sits in is printed across lines,
+ * and it has nowhere to live — so it disappears — when the construct joins onto one line. Neither
+ * direction is the printer inventing or destroying a blank for its own reasons.
+ *
+ * **§Blocks, records, object types: one line vs broken.** "Print one line if the whole construct fits
+ * in \`printWidth\` and contains no hard break of its own. Otherwise break: one item per line, each
+ * indented one level, closing delimiter on its own line." A hard break of its own is "an item that
+ * cannot be printed on one line itself — a nested broken block, a multi-line string, a line comment".
+ * That sentence is the whole difference between the keep cases and the changes here.
+ *
+ * ## Measured
+ *
+ * One pass, \`.probe/_layoutblank.mts\` (the exact legacy byte strings) plus \`.probe/_layouttype.mts\`,
+ * \`.probe/_layoutbreak.mts\`, \`.probe/_layoutempty.mts\` and \`.probe/_layoutblankbreak.mts\` for the
+ * controls. Every statement below is accepted by our parser and by **all four** mocs — the \`moc\`
+ * column reads \`TYPE\`/\`OK\`, never \`SYNTAX\` — and the file's output is a fixed point
+ * (\`.probe/_layoutwhole.mts\`). The probe labels the four builds \`1.1.0\`, \`rel1.16\`, \`pin\`, \`v2\`; their
+ * \`--version\` strings are recorded in \`docs/adjacency.md\` and they **disagree on grammar** elsewhere in
+ * the port, so the agreement here is a measurement and not an assumption.
+ *
+ * ## Every statement ends in \`;\`
+ *
+ * This file is formatted as one program. The legacy tests formatted one fragment at a time, so a
+ * fragment like the \`extra newlines\` case's trailing \`b\` carried no \`;\`; here it must have one or the
+ * harness reports \`Missing ';'\`. The added \`;\` is the only edit made to any legacy source below, and
+ * where it changes the shape it is called out.
+ *
+ * ## The adjudications
+ *
+ * Five cases print to something other than the legacy expectation. None is a printer bug: each is
+ * \`docs/style.md\`'s rule applied to a construct the old engine laid out by line-shape.
+ *
+ * 1. **\`empty block\`, \`{\\n\\n}\`.** Legacy expected \`'{\\n\\n};\\n'\`; measured output is \`'{\\n\\n}\\n'\`. Two
+ *    separate claims are tangled in the legacy string and they separate cleanly.
+ *    - *The blank line* is **kept**, because the author wrote it and the construct is already across
+ *      lines — the §Blank lines rule preserves a written blank. The triage note ("the new formatter
+ *      should not invent a blank line there") is about *inventing*, and this printer does not: it
+ *      prints \`{}\` for \`{}\`, \`{}\` for \`{\\n}\`, and \`{\\n\\n}\` only where the source had it. Measured,
+ *      \`.probe/_layoutempty.mts\`.
+ *    - *The \`;\`* is **not invented**. \`preserve\` has no \`ifBreak(";")\`: a \`;\` is a token, and this
+ *      printer reproduces tokens rather than synthesizing them. \`docs/style.md\` states this exact
+ *      case in its own words under §"Interaction with the ported fixture expectations": "\`preserve\`
+ *      keeps the blank line (the empty-list branch in \`listDoc\`) and omits the \`;\`."
+ *
+ *    So the change is the trailing \`;\`, and the blank line is a *keep* that happens to be inside the
+ *    changed string.
+ * 2. **\`block with existing newline\`, \`{a;\\nb}\`.** Legacy expected \`'{\\n  a;\\n  b;\\n};\\n'\` — broken
+ *    and \`;\`-terminated. Measured: \`'{ a; b }\\n'\`. The construct fits in \`printWidth\` and owns no
+ *    hard break, so §"Blocks…" joins it, and the joins are the author's own \`;\`. The control is that
+ *    a block which *does* own a hard break stays broken — see the anonymous-function section.
+ * 3. **\`anonymous function line break\`, \`(func() {\\na\\n})\`.** Legacy expected \`'(\\n  func() {\\n    a;\\n  }\\n);\\n'\`.
+ *    Measured: \`'(func() { a })\\n'\`. \`a\` is a single short expression, so the inner block joins and
+ *    then the outer \`(\` has no hard break to react to and joins too. The legacy expectation both
+ *    broke the group and appended a \`;\` the source never had.
+ * 4. **\`if-else wrapping\`.** Three of the legacy cases are already one line and are identity here
+ *    (\`if true () else ()\`, \`if true {} else {}\`, \`if true (a) else (b)\`), so only the fourth is a
+ *    change: legacy expected the chain broken one body per line with a trailing \`;\`; measured
+ *    \`'if true { a } else if false { b } else { c }\\n'\`. The chain fits and has no hard break, so it
+ *    joins; the \`;\` is not invented. The control that the rule is *fit*, not "if-else never breaks",
+ *    is \`.probe/_layoutbreak.mts\`'s too-long pair: \`if true { …32… } else { …32… }\` breaks the second
+ *    body, so the printer breaks constructs it must.
+ * 5. **\`nested group line breaks\`.** Legacy expected \`'((\\n  x,\\n  x,\\n  x,\\n  x,\\n  x,\\n));\\n'\` — the
+ *    inner tuple broken, the outer paren kept inline. Measured: the outer paren **breaks too**. The
+ *    inner tuple is a nested broken block, which §"Blocks…" defines as a hard break of its own, so
+ *    the outer group cannot join; and its closing \`)\` must sit on its own line. The trailing comma on
+ *    the inner tuple is the source's own and is preserved.
+ *
+ * The two keeps that could read as rules this file is not claiming:
+ *
+ * - **\`group spacing\`, \`{};{a};();(a)\`.** The legacy expected \`'{}; { a }; (); (a)\\n'\`, joining the
+ *   four statements with a space. Measured: one per line, \`'{};\\n{ a };\\n();\\n(a);\\n'\`. This is not
+ *   a spacing rule at all — \`source_file\` is a \`;\`-separated list, and a list in this printer is one
+ *   item per line. \`{ a }\` additionally shows the record literal's inner space, which is
+ *   \`whitespace-and-brackets.mo\`'s subject, repeated here only as the by-product of the same line.
+ * - **\`tuple line breaks\`.** The legacy source is already a broken tuple with a source trailing comma
+ *   and it prints back byte for byte. It is here as the **identity control** for the nested case:
+ *   breaking alone does not move a tuple, only re-nesting it does.
+ *
+ * ## What is not here
+ *
+ * - **\`type binding line breaks\` is not portable.** Both legacy sources are bare fragments —
+ *   \`<(xxx, …)>;\` and \`<{ xxx; … }>;\` — and **all four mocs and our own parser reject both with
+ *   \`SYNTAX\`** (\`.probe/_layoutblank.mts\`). Neither is a program, so neither can be a fixture; the
+ *   same refusal applies to the two "make it a real declaration" repairs I tried
+ *   (\`.probe/_layouttype.mts\`: \`type T = <(…)>;\` and \`type T = <{ … }>;\` are also \`SYNTAX\` on all
+ *   four). Recording a tree-sitter-only spelling and calling it printer behaviour is exactly what the
+ *   port must not do; \`docs/grammar-deviations.md\` is where this class of gap belongs.
+ * - **\`lines before/after group\`'s option half.** The legacy test's four option-dependent cases pass
+ *   \`motokoRemoveLinesAroundCodeBlocks: true\`. The harness (\`tests/format.test.ts\`) passes one fixed
+ *   \`OPTIONS\` object with no per-file overrides, so an option-dependent case cannot be a fixture, and
+ *   the option is not wired up in any case (\`.probe/_opts.mts\`, cited by
+ *   \`whitespace-and-brackets.mo\`). Only the two default-option \`expectFormatted\` cases are ported, in
+ *   the last section; they are **changes** because this printer joins where the old one preserved.
+ */
+
+// --- An empty block: the author's blank is kept, the \`;\` is not invented --------------------------
+//
+// Four spellings, four outputs, and the differences are all the author's. \`{}\` and \`{\\n}\` both print
+// \`{}\` — a bare newline is not a blank line, and there is nothing to join. \`{\\n\\n}\` prints its blank
+// back because the source is already across lines; see adjudication 1. \`{\\n\\n\\n}\` is the §Blank lines
+// cap applied *inside* a construct rather than between statements. The last pair shows the \`;\` rule
+// directly: an author's \`;\` is kept, and the one the legacy test expected after a broken empty block
+// is not synthesized.
+
+{};
+
+{};
+
+{
+
+};
+
+{
+
+};
+
+// --- \`block with existing newline\`: a block that fits is joined -----------------------------------
+//
+// Adjudication 2. Both spellings fit and own no hard break, so both join; the separators are the
+// author's \`;\` and are neither added nor dropped.
+
+{ a; b };
+
+{ a; b };
+
+// --- \`extra newlines\`: a run of blanks collapses to one -------------------------------------------
+//
+// \`docs/style.md\` §Blank lines names its own input for this — \`a;\\n\\n\\n\\n\\nb\` → \`a;\\n\\nb;\\n\` — and
+// the run below is that input with the harness-mandated \`;\` on \`b\`.
+
+a;
+
+b;
+
+// --- \`group spacing\`: a \`;\`-separated list is one item per line -----------------------------------
+//
+// The four statements juxtaposed on one source line, which is how the legacy test wrote them. The
+// separator between them is the author's \`;\`; the printer is deciding line breaks, not spacing, which
+// is why the compact input and the spaced input below print the same way.
+
+{};
+{ a };
+();
+(a);
+
+{};
+{ a };
+();
+(a);
+
+// --- \`tuple line breaks\`: the identity control ----------------------------------------------------
+//
+// A tuple already broken with a source trailing comma. §"Blocks…" breaks it one item per line with the
+// closing \`)\` on its own line, which is what it already is, and \`preserve\` keeps the trailing comma.
+// Nothing here moves — the point is the contrast with the next section.
+
+(
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+  xxxxxxxxxxxxxxxxxxxx,
+);
+
+// --- \`nested group line breaks\`: a hard break propagates outward ----------------------------------
+//
+// Adjudication 5. The inner tuple is a nested broken block, so the outer paren owns a hard break and
+// must break as well. The source has a source-level space between \`,\` and the next item and no
+// trailing comma; the printed form drops the space and keeps the no-trailing-comma, so the only
+// difference from the input is the outer group's break and the indentation it forces.
+
+(
+  (
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx,
+    xxxxxxxxxxxxxxxxxxxx
+  )
+);
+
+// --- \`anonymous function line break\`: fits, so it joins -------------------------------------------
+//
+// Adjudication 3. \`a\` is one short expression, so the function body joins and the enclosing paren —
+// which was \`(\` newline \`func…\` newline \`)\` — joins with it. The tight spelling beneath is the same
+// program written the way the printer prints it, and the pair is a fixed point both ways.
+
+(func() { a });
+
+(func() { a });
+
+// --- \`if-else wrapping\`: the three identity cases, then the change ---------------------------------
+//
+// Adjudications 4. The first three are one line already, in both engines. The fourth is the legacy
+// broken chain, which fits and joins.
+//
+// The four are deliberately the same *question* — is the branch a paren, a block, or a chain — asked
+// four ways, because the only thing that decides their layout is whether they fit.
+
+if true () else ();
+
+if true {} else {};
+
+if true (a) else (b);
+
+if true { a } else if false { b } else { c };
+
+// --- \`lines before/after group\`: the default-option half ------------------------------------------
+//
+// The two legacy \`expectFormatted\` cases, which the old engine returned unchanged: a blank line
+// immediately inside a bracket. Measured, both are **changes** — the group fits on one line, so the
+// blank has nowhere to live and disappears (\`.probe/_layoutbreak.mts\`). The option half of the legacy
+// test (\`motokoRemoveLinesAroundCodeBlocks\`) is not portable; see "What is not here".
+
+[1, 2,];
+
+{ abc; };
+
+// --- The other half of the rule: a blank between items of a group that *does* break ---------------
+//
+// The positive control for the section above — the blank is not simply deleted everywhere, only where
+// the group joins and there is no line boundary to hold it. Here the group must stay broken (the line
+// comment is a hard break of its own), and the blank the author put between \`a\` and the comment prints
+// back. That the same holds between items of a group broken by *width* is
+// \`.probe/_layoutblankbreak.mts\`, measured (it needs 200 characters of filler, so it is cited rather
+// than written here).
+
+{
+  a;
+
+  // c
+  b;
+};
+"
+`;
+
+exports[`format/layout/trailing-separators.mo > prints as snapshotted 1`] = `
+"/**
+ * Semicolons and trailing delimiters: the one rule \`preserve\` cannot implement as the spec table writes it.
+ *
+ * ## Where this file comes from
+ *
+ * \`docs/fixture-triage.md\` §"Semicolons and trailing delimiters — all **change**" — nine legacy tests,
+ * every one of them \`change\`, because every one encodes the old engine's line-shape guessing:
+ *
+ * - \`automatic semicolons\` (+ three comment and multi-line-text variants)
+ * - \`no automatic semicolons before \\\`else\\\`, \\\`catch\\\`, etc.\`
+ * - \`add trailing delimiters\`, \`remove trailing delimiters\`
+ * - \`trailing semicolon after block comment\`
+ * - \`trailing comma in square brackets\`
+ * - \`replace delimiters\`
+ *
+ * The triage's instruction for this group is explicit: "A fixture whose name is \`automatic semicolons\`
+ * and whose body is a hand-enumerated table of line-shapes should be **deleted and replaced**, not
+ * ported — the table is the old algorithm." So the sections below are re-derived from the rule, not
+ * transcribed from the legacy expectations, and each legacy input that survives appears at the
+ * **construct's real spelling** where the legacy one did not parse.
+ *
+ * ## The rule, and why it is the whole point of the file
+ *
+ * \`docs/style.md\` §"The semicolon rules" states the rule as a decision table (\`;\` between items
+ * always; after the last item only when the construct is broken over several lines). The same section
+ * then rules on it for this printer:
+ *
+ * > \`preserve\` cannot implement those cells, and the reason is not a preference: the runtime guard
+ * > compares the printed token stream against the tree the printer was given, and **a separator is a
+ * > token**. So a \`;\` the printer adds or removes is a difference the guard must reject.
+ *
+ * That is the invariant this file asserts directly. Every section below holds the **same construct
+ * twice** — once with the source's trailing separator and once without — and the snapshot is the
+ * assertion that the printer kept the first and did not invent the second. A printer that computed
+ * the table's \`ifBreak(";")\` cell would print the two spellings identically; a printer that preserves
+ * tokens cannot.
+ *
+ * There is a second half to "between items the rules coincide", and it is provable rather than
+ * fortunate: the grammar *requires* a separator between items (\`{ a = 1 b = 2 }\` fails to parse), so
+ * "preserve it" and "always print it" are the same rule there. That is why the two-items-per-line
+ * cases below are identity: the source could not have omitted the \`;\` in the first place.
+ *
+ * ## Measured
+ *
+ * One pass over every statement below as ONE program (\`.probe/_trailsep4.mts\`): our parser accepts the
+ * whole file, **all four mocs parse it** (\`1.1.0\`, \`rel1.16\`, \`pin\`, \`v2\` — each reading \`TYPE\`, i.e.
+ * past the parser to the typechecker), and the output is a **fixed point**. Per-statement columns are
+ * in the same probe. The versions measured are \`1.1.0\`, \`1.16.1\` (\`rel1.16\`), \`1.16.1-26-g1d57a4fc7b\`
+ * (\`pin\`) and \`2.0.0-beta.1\` (\`v2\`); the four were chosen because they disagree on grammar, and for
+ * this group they happen to **agree on every case below**.
+ *
+ * ## The adjudications
+ *
+ * The legacy expectation is the \`moc2\` target (style.md §"Read this table as the \`moc2\` target"), and a
+ * separator it adds or removes is a \`change\` by construction, with the copy being the source's own.
+ * Each of the nine legacy tests, and what became of it:
+ *
+ * 1. \`automatic semicolons\` → sections 1, 5 and 9. Legacy \`{}\\nA;\\n\` *appended* a \`;\` to a line that
+ *    was exactly \`}\`; new \`{}\\nA;\` — the \`;\` is not there to preserve, so it is not printed. Same for
+ *    \`{}.A;\` → \`{}\\n.A;\` (the break at the \`.\` seam is preserved too). The fourth legacy case,
+ *    \`[\\n  {\\n  abc;\\n  }\\n  { 123 }\\n];\`, is **SYNTAX on all four mocs** (an array item \`{ 123 }\` is
+ *    not valid there); section 3 carries the valid spelling instead.
+ * 2. \`automatic semicolons with line comment\` → section 6: all three legacy inputs parse and all three
+ *    are \`change\` for the same un-inventable \`;\`.
+ * 3. \`automatic semicolons with block comment\` → section 7. One legacy case is \`try {\\n}\\n /*c*/ catch
+ *    {}\` — \`catch\` with no binding is SYNTAX on all four mocs, so it is written \`catch e {}\`. Another
+ *    (\`... /*c*/ variable {}\`) is SYNTAX on all four for the same reason (\`variable\` there is not a
+ *    program head) and is not ported; \`docs/grammar-deviations.md\` is where a parser-side gap of that
+ *    kind belongs, but this one is not a gap — the legacy spelling was never Motoko. The legacy
+ *    expectation also *deleted* the leading space in \`\\n /*c*/ else\`; the space is not a token and the
+ *    printer keeps the source's comment gap, which is the \`change\`.
+ * 4. \`automatic semicolons with multi-line text\` → section 11: all eight cases are identity on both
+ *    engines. The point is that a \`"\` literal is one token whose text may contain \`{\`, \`}\` and \`;\` and
+ *    the printer must not touch any of it — a line-shape scanner would.
+ * 5. \`no automatic semicolons before \\\`else\\\`, \\\`catch\\\`, \\\`etc.\\\`\` → section 8. The legacy expectation
+ *    is right about the *separator* (there is none before \`else\`) and wrong about the layout (it joined
+ *    \`else\\n{}\` and re-indented \`  else\`). The new outputs keep the source's breaks.
+ * 6. \`add trailing delimiters\` → section 9. The legacy expectation *adds* a trailing \`,\` and a \`;\` and
+ *    breaks the group; new output is the group on one line with the source's own separators. Every
+ *    cell it added is a separator, so every one is inert here.
+ * 7. \`remove trailing delimiters\` → section 9. \`(a,b,c,)\` → the legacy expectation drops the comma;
+ *    new output is \`(a, b, c,)\` — the comma is a token, so it is kept. This is the cleanest single
+ *    statement of the invariant in the file: the input has a trailing separator, and it survives.
+ * 8. \`trailing semicolon after block comment\` → section 12: identity. The legacy cases are already
+ *    canonical and are kept as the positive control for "the printer does not *remove* a separator".
+ * 9. \`trailing comma in square brackets\` → section 10. Two legacy inputs are SYNTAX on all four mocs
+ *    (\`x : [\\n  { abc; }\\n];\` and the \`public type\` block — \`abc;\` is not a field type, and \`public\` is
+ *    not a top-level form of a bare program); they are replaced by valid spellings. The rest are
+ *    \`change\`: the legacy expectation adds a trailing \`,\` and breaks the list; new output keeps the
+ *    source's.
+ *
+ * The triage also lists **\`replace delimiters\`** in this group, and it is Python-2-to-3 style dead: its
+ * two inputs, \`(a;b;c)\` and \`{a,b,c}\`, are **SYNTAX on all four mocs** (\`Missing \\\`)\\\`\` and \`Unexpected
+ * input\`), so there is no fixture to write — the old engine accepted them because it shaped lines
+ * rather than parsing. They are **deleted**, per triage §"The refusals, measured", which already ruled
+ * this exact test: "it read a semicolon-separated tuple and repaired it to a comma-separated one. That
+ * is the old algorithm, and there is no new expectation to port."
+ *
+ * ## The hazard case, kept because the rule is about safety and not taste
+ *
+ * \`docs/semicolons.md\` §4 identifies the one place where a "tidy" printer silently changes a program:
+ * a \`}\`-ending statement followed by a \`(\`- or \`[\`-starting one needs its \`;\`, or the two re-glue as
+ * an application with **no error** (\`.probe/semi-parse.mjs\`, \`NEG-semi-false-interior-drop\` and
+ * \`ADV-brace-stmt-then-paren-stmt\`). The last statement in section 13 is that pair, and it is identity:
+ * the printer may not "clean up" the interior \`;\`, because the input it would produce is a different
+ * program. That is the safety half of the invariant, and it is why the file is worth its length.
+ *
+ * ## Every statement ends in \`;\` (or is a complete construct that does not need one)
+ *
+ * This file is formatted as ONE program, so two adjacent statements with nothing between them are a
+ * parse error (\`Missing ';'\`). The legacy tests formatted one fragment at a time and could elide it.
+ */
+
+// --- 1. The invariant, in \`;\`-lists: present is kept, absent is not invented -----------------------
+//
+// Four constructs, each spelled with and without its trailing \`;\`. The \`let\` binding is deliberate:
+// the block sits in expression position, so no statement separator is involved and the two spellings
+// are compared on exactly one axis. The \`b3\`/\`b4\` pair is broken in the source and the printer joins
+// it, which is the group-break rule and not a separator rule — but the trailing \`;\` survives the join
+// in \`b3\` and is absent in \`b4\`, which is the point.
+
+let b1 = { a; };
+let b2 = { a };
+let b3 = { a; };
+let b4 = { a };
+
+// The interior separator is mandatory (the grammar rejects \`{ a b }\`), so this pair is identity: the
+// source could not have omitted it, and "preserve" and "always print" coincide.
+
+let b5 = { a; b };
+let b6 = { a; b; };
+
+// The same invariant on a module body. \`M2\` is the load-bearing half: a printer computing the table's
+// cell would put a \`;\` after \`1\`, and the source has none.
+
+module M1 { let a = 1; };
+module M2 { let a = 1 };
+
+// --- 2. The same invariant on object and variant types ---------------------------------------------
+//
+// These are the \`semi_sep\` / \`semi_sep1\` rows. \`T2\` and \`T4\` are single-item lists, which is where the
+// table's note about \`seplist1\` matters: \`{ #ok : A }\` has no printed \`;\` on one line, and the source
+// that wrote one keeps it.
+
+type T1 = { #ok : A; };
+type T2 = { #ok : A };
+type T3 = { x : Nat; };
+type T4 = { x : Nat };
+type T5 = { #a : Nat; #b : Text };
+
+// --- 3. The invariant in comma-separated lists: \`[]\`, \`()\`, call arguments -------------------------
+//
+// The comma family is where style.md's caution bites: \`[1 2]\` and \`(1 2)\` do not fail to parse, they
+// parse as a *call* and as an *index*, so a comma here is never a style choice the printer may make.
+// The source's comma is a token like any other, and the pairs are the evidence.
+
+let a1 = [1,];
+let a2 = [1];
+let t1 = (1, 2,);
+let t2 = (1, 2);
+let c1 = f(1,);
+let c2 = f(1);
+
+// The valid spelling of the legacy \`automatic semicolons\` fourth case (its \`{ 123 }\` item is SYNTAX on
+// all four mocs). \`[{ abc; }]\` is a one-element array whose element is a block, and the second line is
+// the same array with the source's trailing comma.
+
+let k1 = [{ abc; }];
+let k2 = [{ abc; },];
+
+// --- 4. \`;\` inside a broken list, and the trailing comma after it ----------------------------------
+//
+// \`let v\`/\`let w\` are the invariant on an array of records: \`[{ a = 1; }]\` is the same list, once with
+// the source's trailing \`,\` and once without. The printer joins both to one line and keeps whichever
+// comma the source wrote — including in the inner record, where \`a = 1;\` is the source's own.
+
+let v = [{ a = 1; },];
+let w = [{ a = 1; }];
+
+// --- 5. \`automatic semicolons\`, re-derived ---------------------------------------------------------
+//
+// The legacy test's four line-shapes, reduced to the two facts they were encoding. A \`}\`-ending
+// expression statement followed by a newline is a complete statement, and the newline is a *gap*, not a
+// separator: the printer does not append \`;\` to make one. \`{}\\nA;\` and \`{};\\nA;\` are different
+// programs and the printer tells them apart.
+
+{}
+A;
+{}
+.A;
+if () {}
+else {};
+
+// \`{}\` then a blank line then \`{}\`: two complete statements, so the file is valid, and neither
+// trailing \`;\` is invented. The blank line is the one-blank-line rule, not this group's subject —
+// it is here because the legacy case \`{}\\n\\n{};\` is the pair (\`{}\` with, \`{}\` without) side by side.
+
+{}
+
+{};
+{}
+
+{}
+
+// --- 6. \`automatic semicolons with line comment\` ---------------------------------------------------
+//
+// A \`//\` comment is an item in the block's own list, so the gap that decides the layout is the one
+// after it, and the \`}\` is *inside* the block's break. The \`;\` the legacy test appended after \`}\` is
+// still not there. The comment is printed verbatim (triage §"Comments"), never converted.
+
+{
+  // }
+}
+A;
+{
+  //
+}
+A;
+{}
+//
+A;
+
+// --- 7. \`automatic semicolons with block comment\` --------------------------------------------------
+//
+// The first case is one top-level block comment whose *text* contains a \`{\`, a \`}\`, a \`;\` and braces —
+// identity, and the reason a line-shape scanner gets this wrong. It is \`expectFormatted\` in the legacy
+// suite and remains so.
+
+/*
+
+{
+// }
+};
+A
+
+*/
+
+{}
+/**/
+A;
+{
+  /**/
+}
+A;
+if () {}
+ /*c*/ else {};
+try {}
+ /*c*/ finally {};
+{}
+ /*c*/ .A;
+
+// --- 8. No \`;\` before \`else\`, \`catch\` or \`finally\` -------------------------------------------------
+//
+// The separator half of this legacy test survives exactly: there is never a \`;\` before \`else\`. The
+// layout half does not. The legacy expectation joined \`else\\n{}\` to \`else {}\` and stripped the
+// two-space indent from \`  else\`; the new printer keeps the source's break, because the break is a
+// gap the author wrote and the group has no hard break of its own to replace it with.
+
+if a {}
+// Comment
+else {};
+if a
+{}
+// Comment
+else {};
+if a {}
+// Comment
+else {};
+if a {}
+
+// Comment
+else {};
+if a {}
+// Comment
+  else
+{};
+try {}
+// Comment
+catch e {};
+try {}
+// Comment
+finally {};
+
+// --- 9. Add / remove trailing delimiters -----------------------------------------------------------
+//
+// Both legacy tests are the invariant read in opposite directions, and both are \`change\`.
+//
+// \`add trailing delimiters\` asserted that a group broken in the source gets a trailing \`,\` and a
+// trailing \`;\` appended. Neither exists in the source, so neither is printed: the group fits on one
+// line and is joined, and the source's own separators are all that survive.
+//
+// \`remove trailing delimiters\` asserted that \`(a,b,c,)\` loses its comma. It is a token, so it does not:
+// the output is \`(a, b, c,)\`. That is the single clearest statement of the invariant in this file.
+
+(a, b, c);
+(a, b, c,);
+(a, b, c,);
+(a, b, c);
+
+// --- 10. Trailing comma in square brackets ---------------------------------------------------------
+//
+// The legacy expectations add a trailing \`,\` and re-indent the list. The new printer joins what fits
+// (\`[\\na,b]\` is a list with a source break that has no hard break of its own, so it comes back on one
+// line) and keeps the source's comma either way. \`x : [\\nT\\n]\` is the exception in the other
+// direction: a type \`[T]\` keeps the source's break, because the printer reproduces the \`typ_path\`
+// node's children's gaps rather than computing a break for it.
+
+[a, b];
+[a,];
+x : [
+T
+];
+let z1 : [ { abc : Nat } ] = 1;
+let k = [{ abc; },];
+
+// --- 11. Multi-line text: the literal is one token ------------------------------------------------
+//
+// All eight legacy \`expectFormatted\` cases, all identity. The \`"\` literals contain \`{\`, \`}\` and \`;\`
+// and the point is that a *token's* text is reproduced byte for byte — including the blank lines and
+// the leading spaces on continuation lines. The \`"\\"" # "..."\` case keeps the concatenation \`#\` seam
+// and its spaces too.
+
+"
+
+{
+// }
+}
+A
+
+";
+"\\"" # "
+
+{
+// }
+}
+A
+
+";
+"{
+}";
+"
+{
+}";
+"{
+}
+";
+"
+{
+}
+";
+"
+
+{
+}
+";
+"
+{
+}
+
+";
+
+// --- 12. A trailing semicolon after a block comment (positive control) -----------------------------
+//
+// Both legacy cases are identity, and they are here to pin the *other* direction of the invariant: the
+// printer must not remove a separator the source wrote. \`x;\` keeps its \`;\` and the comment follows on
+// its own line.
+
+x;
+/**/
+x;
+/*
+*/
+
+// --- 13. Switch arms: the one row where preserve and moc2 differ, and the interior-separator hazard -
+//
+// \`docs/style.md\` rules that between switch arms there is never a \`;\` (the \`case\` keyword ends the
+// previous arm), and that after the last arm \`preserve\` keeps whatever the source had while \`moc2\`
+// drops it. Both spellings are below, and both are identity — measured (\`.probe/_switchsemi5.mts\`):
+// the named node tree is equal and the *token stream* differs by exactly the \`;\`, which is why this is
+// a real edit and not a no-op, and why \`preserve\` may not make it.
+//
+// The \`func\` case is the hazard from \`docs/semicolons.md\` §4: a \`}\`-ending statement followed by a
+// \`(\`-starting one needs its interior \`;\`, or \`let x = 1 (x, 2).0\` re-glues as an application with no
+// syntax error. Identity, and load-bearing.
+
+switch x { case 1 { a }; case 2 { b } };
+switch x { case 1 { a }; case 2 { b }; };
+switch x { case 1 a; case 2 b };
+func f9() : Nat { let x = 1; (x, 2).0 };
+"
+`;
+
+exports[`format/layout/whitespace-and-brackets.mo > prints as snapshotted 1`] = `
+"/**
+ * Whitespace at the edges of a file, blank lines between statements, and the inner spacing of
+ * \`{\`/\`[\`/\`(\`.
+ *
+ * ## Where this file comes from
+ *
+ * Four legacy tests — \`empty\`, \`trailing newline\`, \`extra whitespace\`, \`bracket spacing\` — hold 7
+ * cases, 6 of which already print to their expectation and 1 of which does not. The one that does not
+ * is the \`bracketSpacing\` case discussed below, and it is a change \`docs/style.md\` asks for rather
+ * than a regression to fix.
+ *
+ * ## The rules, from \`docs/style.md\`
+ *
+ * - **§Blank lines.** "At most one consecutive blank line in the output, and the printer never
+ *   invents one. Runs of two or more blanks collapse to one; leading and trailing blanks inside a
+ *   file are dropped." The document gives this exact case as its own testable claim:
+ *   \`format('\\n\\na;\\n\\n\\nb;\\n\\n')\` → \`'a;\\n\\nb;\\n'\`. The first two sections below are that rule, minus
+ *   the leading blanks — see the note on file edges.
+ * - **§Conflict rulings 1.** Inner spacing of record literals follows \`bracketSpacing\`, default
+ *   \`true\`. The legacy suite asserts \`format('{abc}')\` → \`'{ abc }\\n'\`, which is the ruling's own
+ *   stated evidence, and the section on inner spacing below is that ruling.
+ *
+ * ## Why the leading-blank half of the rule is not here
+ *
+ * "Leading blanks are dropped" cannot be pinned by a fixture that *starts* with leading blanks,
+ * because this file starts with this comment. The rule is real and it is measured
+ * (\`.probe/_layoutmore.mts\`: \`'\\n\\na;\\n\\n\\nb;\\n\\n'\` → \`'a;\\n\\nb;\\n'\`), it just needs a fixture with no
+ * header, which belongs to the options/first-print PR. What this file pins is the other half: blanks
+ * at the end of the file, in the last section.
+ *
+ * ## Why \`{  abc  }\` is the printer's business and \`arr[  1  ]\` is not
+ *
+ * Inner spacing comes from one table, \`src/printer/parts.ts:LISTS\`, where each list kind carries a
+ * \`spaced\` flag. A record literal is \`spaced: true\` and an array literal is \`spaced: false\`, so both
+ * normalise: the source's extra spaces were never tokens, and the guard has nothing to compare them
+ * against (\`shapeOf\` projects every \`Text\` gap away, \`src/parser/normalize.ts\`).
+ *
+ * \`arr[  1  ]\` is the exception that shows the rule is a *table* and not a principle. That node is an
+ * \`array_idx_exp\`, and it is **not** in \`LISTS\` — an index is not a list — so it falls through to
+ * \`branchDoc\`, which reproduces its children's gaps verbatim. So the same bracket pair keeps its
+ * spaces in one position and loses them in another, and the fixture pins both spellings side by side.
+ *
+ * ## The deliberate change in this file
+ *
+ * The legacy \`bracket spacing\` test's second case passes \`{ bracketSpacing: false }\` and expects
+ * \`{abc}\`. **That option is not wired up yet** — \`.probe/_opts.mts\` shows \`bracketSpacing: false\`,
+ * \`motokoRemoveLinesAroundCodeBlocks: true\` and \`motokoSyntax: 'moc2'\` all leaving the output
+ * unchanged, because the printer reads only \`printWidth\`/\`tabWidth\` (\`src/printer/walk.ts\`) and the
+ * plan gives "organize imports on the CST, **and options**" its own M2 PR. So the case is not
+ * portable yet, and it is not dropped either: the section below asserts the **default** behaviour,
+ * and the option's own fixture belongs in the PR that implements it. Writing \`{abc}\` here would pin
+ * a snapshot this printer cannot produce and pretend the option works.
+ */
+
+// --- A run of blanks collapses to one -------------------------------------------------------------
+//
+// The comment above is followed by two blank lines, and the printer caps the run at one. This is the
+// §Blank lines rule's exact shape, and the comment is here rather than only in the header so that the
+// gap being tested is an ordinary inter-item gap and not the file-edge special case.
+
+a;
+
+b;
+
+// --- One blank line is preserved as written -------------------------------------------------------
+//
+// The other half of the rule: a single blank line is not *removed* either. This pair is already
+// canonical, and it is here so that a printer which collapsed every blank would fail.
+
+c;
+
+d;
+
+// --- A blank line after a comment -----------------------------------------------------------------
+//
+// The comment is an item in the file's own list, so the gap that decides the blank is the one *after*
+// it. It behaves like any other inter-item gap: two blanks collapse to one, and the comment stays on
+// its own line. Measured in \`.probe/_layoutmore.mts\`.
+
+// two blanks follow this comment
+
+e;
+
+// --- Inner spacing comes from the list table, not from the source ---------------------------------
+//
+// Three spellings of one record literal and two of one array literal. Each group collapses to a
+// single output — records spaced, arrays not — because the spacing is a \`spaced\` flag in
+// \`src/printer/parts.ts:LISTS\` and the source's spaces were never tokens.
+
+let r1 = { abc };
+let r2 = { abc };
+let r3 = { abc };
+
+let a1 = [1];
+let a2 = [1];
+
+// --- The exception: an index expression is not a list ---------------------------------------------
+//
+// The same bracket pair in two grammatical positions, printing differently. \`[  1  ]\` on the right of
+// \`=\` is an \`array_exp\`, a list, so it normalises. \`arr[  1  ]\` is an \`array_idx_exp\`, which is *not*
+// in \`LISTS\`, so its gaps are reproduced verbatim and the spaces survive.
+
+let arr = [1];
+let indexed = arr[  1  ];
+
+// --- The same for \`(\` and for call arguments ------------------------------------------------------
+//
+// \`par_exp\` is a list with \`spaced: false\`, and so is a call's argument list, so both normalise.
+
+let p = (1);
+
+f(1, 2);
+
+// --- Trailing blank lines at the end of the file --------------------------------------------------
+//
+// Blanks at the end of the file are dropped, and the file still ends in exactly one newline. Nothing
+// follows this statement, so the run below is a file-edge run and not an inter-statement one.
+
+f;
+"
+`;
+
+exports[`format/obj-actors/object-expressions.mo > prints as snapshotted 1`] = `
+"// Object, module, actor and class bodies, and the anonymous \`object { ... }\` / \`actor { ... }\`
+// expressions. \`obj_body\` recurses, so each nesting level is deliberate.
+//
+// A plain \`actor { ... }\` declaration is \`obj_dec\` + \`obj_body\`, NOT \`actor_exp\`; \`actor_exp\` is
+// only reachable when the operand is a non-body expression (\`actor (x)\`, \`actor "aaaa-aa"\`).
+// \`system_exp\` is only reachable as a \`system func\` inside a body. Neither is a \`{}\` list.
+let anon = object { public let x = 1; public func f() : Nat { 1 } };
+let anonEmpty = object {};
+let actorExp = actor {
+  public func f() : Nat { 1 };
+  public func g() : Nat { 2 };
+};
+let annotated = actor : actor { f : () -> async Nat } {
+  public func f() : async Nat { 1 };
+};
+module Inner { public let g = 1 };
+object Named { public func h() : Nat { 1 } };
+class Klass(x : Nat) { public let v = x; public func get() : Nat { v } };
+shared actor class Boxed<T>(init : T) {
+  public var value = init;
+  public func set(v : T) : () { value := v };
+};
+let mix = mixin (y : Nat) { public let m = y };
+actor Palindrome {};
+"
+`;
+
+exports[`format/obj-actors/object-patterns-and-fields.mo > prints as snapshotted 1`] = `
+"// \`obj_pat\` and the four field token shapes that every body above is made of: \`dec_field\`
+// attaches a visibility/stability to a declaration, \`exp_field\` carries the mutable \`var\` and
+// the rename form, \`val_tf\`/\`func_tf\`/\`typ_tf\` are the object-type fields, and \`val_pat_field\`
+// is the object-pattern field. (There is no \`var_tf\` kind: a mutable object-type field is a
+// \`val_tf\` whose first token is \`var\`.)
+//
+// The record-literal and object-type inner spacing is left as the source wrote it — see
+// \`docs/style.md\` conflict ruling 1, \`bracketSpacing\`, which is inert under \`preserve\`.
+object Fields {
+  public let a = 1;
+  private let hidden = 0;
+  public var b = 2;
+  public let renamed = { newX = a; var y = b };
+  public func method() : Nat { a };
+};
+func take({ x; y = renamed } : { x : Nat; y : Nat }) : Nat { x };
+func annotated({ a : Nat } : { a : Nat }) : Nat { a };
+
+// \`with\`-form records nest, and the nested base is itself a list that recurses.
+let outer = { { p = 1 } with q = 2 };
+"
+`;
+
+exports[`format/obj-actors/object-types.mo > prints as snapshotted 1`] = `
+"// Object types (\`obj_typ\`), which the decision table puts in the plain \`semi_sep\` row, and
+// \`variant_typ\`, which shares the braces and the \`;\` but is the \`semi_sep1\` row. Both are the
+// same list contract in code: \`docs/style.md\` says the two rows "print identically", so the
+// family is recorded for fidelity and nothing branches on it.
+//
+// \`wide\` is one line in the source and must break; the rest fit and stay flat.
+type Simple = { x : Nat; y : Text };
+type Method = { f : () -> async Nat };
+type Mutable = { var x : Nat };
+type TypeField = { type U = Nat; x : U };
+type Nested = { inner : { deep : { x : Nat } } };
+type WithParams = { f<A>(a : A) : A };
+type Result = { #ok : Nat; #error : Text };
+type Status = { #Active; #Inactive; #Banned : Text };
+type Arrow = { x : Nat } -> Nat;
+type Wide = {
+  model : Text;
+  plate : Text;
+  isValid : Bool;
+  wasStolen : Bool;
+  expires : Nat
+};
+"
+`;
+
+exports[`format/obj-actors/record-literals.mo > prints as snapshotted 1`] = `
+"// Records: the plain form, the shorthand, the mutable field, the rename.
+//
+// The input is deliberately not canonical, so the fixture shows the printer moving it:
+// \`collapsed\` is broken in the source and fits on one line, \`wide\` is one line in the source
+// and overflows \`printWidth\` so it must break. \`trailing\` pins the rule that a trailing \`;\`
+// is reproduced from the source rather than invented or dropped.
+let collapsed = { a = 1; b = 2; };
+let shorthand = { a; b };
+let renamed = { newX = x; y };
+let mutable = { x = 1; var y = 2 };
+let nested = { outer = { inner = { deep = 1 } } };
+let wide = {
+  alpha = 1;
+  beta = 2;
+  gamma = 3;
+  delta = 4;
+  epsilon = 5;
+  zeta = 6;
+  eta = 7
+};
+let trailing = { a = 1; };
+"
+`;
+
+exports[`format/obj-actors/record-update.mo > prints as snapshotted 1`] = `
+"// The \`... with ...\` record-literal form, which \`parts.ts:listOf\` resolves to \`semi_sep1\` by
+// instance (the node carries a \`with\` token). The \`and\`-only form has no \`with\` and stays
+// \`semi_sep\`. Both print identically under \`preserve\`, because the trailing separator is
+// reproduced from the source rather than chosen by the family — the family is fidelity to the
+// decision table, not a behaviour switch.
+//
+// The prelude words (\`and\`, \`with\`) are ordinary list items: \`parts.ts:isItem\` only excludes
+// separators and delimiters, so they are printed in source order between the base expressions
+// and the fields.
+module M { public let u = 25; };
+let a = { x = 1 };
+let base = { b = 6 };
+let andOnly = { a and M };
+let withOnly = { base with x = 2 };
+let andWith = { a and M with u = 1 };
+let nestedBase = { { c = "C"; d = "D" } with a = 8; b = 6 };
+let wide = {
+  veryLongBaseNameHere
+  with
+  alpha = 1;
+  beta = 2;
+  gamma = 3;
+  delta = 4;
+  epsilon = 5
+};
+"
+`;
