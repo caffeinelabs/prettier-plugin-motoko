@@ -1,14 +1,4 @@
-# Generated build output (also gitignored; Prettier does not read .gitignore)
 /lib/
-/wasm/pkg/
-/wasm/target/
 /packages/mo-fmt/dist/
 /packages/mo-fmt/pkg/
-/tests/generated/
-/tests/test-webapp/dist/
-
-# Lockfiles are owned by npm, not by this project's style
 package-lock.json
-
-# Machine-generated zero-width character table (~1.5k lines, reformatting it is pure churn)
-src/utils/removeZeroWidthCharacters.json

@@ -4,71 +4,62 @@ on:
     push:
         branches: ['main']
     pull_request:
-        branches: ['main']
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
-    # Only superseded PR pushes are cancelled; every commit on main gets a full run
     cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
     contents: read
 
+env:
+    MOTOKO_REV: dfa3a92abca9994512434f9701175e7e499fb0df
+    MOTOKO_CORE_REV: 96a8e1f76f44088709ef38e426c65d1fe829ee07
+
 jobs:
-    build:
+    static:
         runs-on: ubuntu-latest
-
-        strategy:
-            matrix:
-                node-version: [22.x, 24.x]
-                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
-        steps:
-            - uses: actions/checkout@v7
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v7
-              with:
-                  node-version: ${{ matrix.node-version }}
-                  cache: 'npm'
-            - uses: Swatinem/rust-cache@v2
-              with:
-                  workspaces: wasm
-            - run: git clone https://github.com/dfinity/motoko.git ../motoko --depth 1
-            - run: npm ci
-            - run: npm run build --if-present
-            - run: npm run typecheck
-            - run: npm run format:check
-            - run: npm test
-
-    # The web entry point (src/environments/web.ts) shares almost no code path with
-    # the Node one, and was previously not built anywhere in CI.
-    webapp:
-        runs-on: ubuntu-latest
-
         steps:
             - uses: actions/checkout@v7
             - uses: actions/setup-node@v7
               with:
                   node-version: 22.x
                   cache: 'npm'
-            - uses: Swatinem/rust-cache@v2
-              with:
-                  workspaces: wasm
             - run: npm ci
-            # test-webapp resolves the plugin through a local file: dependency, so
-            # the bundler target the web entry imports has to exist, and lib/ built.
-            - run: npm run build
-            - name: Build test-webapp
-              working-directory: tests/test-webapp
+            - run: npm run format:check
+            - run: npm run gen:node-types:check
+
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [22.x, 24.x]
+        steps:
+            - uses: actions/checkout@v7
+            - name: Check out the corpus
               run: |
-                  npm ci
-                  npm run build
+                  for repo in motoko:$MOTOKO_REV motoko-core:$MOTOKO_CORE_REV; do
+                    name=${repo%%:*} rev=${repo#*:}
+                    git init -q ../$name
+                    git -C ../$name fetch -q --depth 1 https://github.com/caffeinelabs/$name "$rev"
+                    git -C ../$name checkout -q FETCH_HEAD
+                  done
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: 'npm'
+            - run: npm ci
+            - run: npm run typecheck
+            - run: npm test
+              env:
+                  MOTOKO_CORPUS_REQUIRED: 1
+            - run: npm run build
 
     required:
         name: ci:required
         runs-on: ubuntu-latest
         if: always()
-        needs: [build, webapp]
+        needs: [static, test]
         steps:
             - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
               run: exit 1
