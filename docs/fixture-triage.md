@@ -52,6 +52,54 @@ The five `moc-invalid` cases that _match_ 0.13 are arm fragments rather than who
 (`case (x) [x];`, `case _ (i)`) — incomplete by construction, which is why the compiler rejects them
 and why the new engine reproducing 0.13 byte-for-byte on them is fine.
 
+#### Where the throws live, now resolved
+
+The 47 throws could not have become `tests/format/**` fixtures: that harness globs every `.mo` under
+its root and asserts `resolves.toMatchSnapshot()`, so a fixture whose format call rejects **fails**
+it — and the only ways out would have been special-casing an area out of the glob (an edit to the
+file that owns the shared serial snapshot) or snapshotting a throw, which is impossible. They
+therefore live in a sibling root, `tests/refusals/`, with `tests/refusals.test.ts`, and
+`tests/format.test.ts` is not touched at all. The files are generated from the ledger by
+`tools/refusal-fixtures.mjs`, so a fixture provably *is* a legacy input; its `--verify` pass checks
+against the pinned moc both that moc rejects the bare input and that the fixture's header comment
+does not change what moc does with it. All 45 distinct inputs pass.
+
+The fixtures assert **class and locatedness only** — `MotokoSyntaxError` (which is `instanceof
+SyntaxError`, so Prettier treats it as a parse error) carrying a `loc` inside the file. The message
+and the exact line/column are deliberately not pinned: both move whenever parser recovery improves,
+and the message is fully derivable from `loc` plus its verb (`Unexpected input` / ``Missing `TOKEN` ``
+/ the `}`-special-cased "closing brace"), so pinning both would be brittle *and* redundant. The rule
+worth guarding is "the compiler's rejects are still rejected, with a location".
+
+One consequence worth recording: the organize suite's throws are **all parse refusals**. Its
+genuinely *declined* case — `import with missing semicolon at end`, where the pass returns `null`
+instead of half-applying a rewrite — does not throw, and is already pinned by
+`tests/format/organize-imports/missing-semicolon.mo`. So no refusal fixture asserts a decline.
+
+#### The port does not duplicate the suites that already exist
+
+Measured before writing anything, because the obvious reading of "port the legacy suite" is to
+re-encode cases that are already green elsewhere. Comparing the ledger's 269 distinct resolved
+inputs against the string literals of `tests/printer.test.ts` and `tests/adjacency.test.ts`, only
+**21 match exactly**. The overlap that does exist is *behavioural*, and it is real but partial:
+
+- `printer.test.ts`'s `IMPORT_SECTION` table **is** the 0.13 `double newline after import section`
+  cases, carried over byte-for-byte (its own comment says so), and all seven pass unmodified.
+  `tests/format/imports/glued-section.mo` and `comment-in-section.mo` snapshot two of the same
+  sources again, so that legacy name is already covered twice over.
+- `tests/adjacency.test.ts` keys an inline table to `src/printer/adjacency.ts`'s `CHECKLIST`, whose
+  completeness it asserts, and reaches the legacy names `null coalesce operator`, `pipe operator`,
+  `conditional parentheses`, and the type-binding seams.
+- `tests/fixtures/*.mo` round-trips rare grammar through `tests/corpus.test.ts` (parse-and-emit only,
+  no snapshots), touching `shared and query keywords`, the literal families, and `if-else wrapping`.
+
+None of that lives under `tests/format/`, and it asserts *behaviour*, not the legacy expectation. So
+those names are ported only where the legacy expectation adds something the existing suite does not
+already pin — and where it does not, the verdict is **delete, and record where the coverage went**,
+which is what the per-name notes below do. Re-encoding them as `.mo` fixtures would double-cover the
+same rule in two harnesses, which is how a suite starts disagreeing with itself.
+
+
 The one `differs` on moc-invalid input is `import with missing semicolon at end`. It is the only case
 in the whole port that was ever **not a fixed point**, and the mechanism is worth reading before
 anyone touches `readSection`: see
