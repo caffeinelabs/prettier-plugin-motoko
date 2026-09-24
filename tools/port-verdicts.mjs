@@ -266,4 +266,65 @@ if (process.argv.includes('--json')) {
         if (v.verdict === 'delete') del[v.name] = (del[v.name] ?? 0) + 1;
     for (const [n, k] of Object.entries(del).sort((a, b) => b[1] - a[1]))
         console.log(`  ${String(k).padStart(3)}  ${n}`);
+
+    // The disposition, per legacy *name* — which is the unit the triage doc speaks in ("the group
+    // verdicts below are per name"), and the unit a fixture is written for. A name whose cases are
+    // all `keep` needs nothing; a name with `change` cases needs a fixture; a name that is all
+    // `delete` is a pointer at `tests/refusals/`.
+    //
+    // `work` is deliberately *not* the change count. A name whose only difference is the semicolon
+    // rule needs no fixture: the rule is pinned once in `semicolons.md`'s own fixtures and is
+    // applied uniformly by the printer, so re-encoding 35 cases of it would be 35 copies of one
+    // assertion. The number a reviewer wants is cases needing *a distinct fixture*, so that is what
+    // the column reports, with the arithmetic in the columns beside it.
+    const WORK = new Set([
+        'breaks placed differently',
+        '0.13 expanded groups that fit',
+        '0.13 collapsed groups the source had spread',
+        '`??` spacing',
+        'the trailing-delimiter rule',
+        'comments re-spelled',
+        'the separator rules',
+    ]);
+    console.log(
+        '\n=== disposition by name (name  total  keep chg del  need-fixture  mechanisms) ===',
+    );
+    const byName = new Map();
+    for (const v of verdicts) {
+        if (!byName.has(v.name)) {
+            byName.set(v.name, {
+                total: 0,
+                keep: 0,
+                change: 0,
+                delete: 0,
+                work: 0,
+                mechs: new Set(),
+            });
+        }
+        const r = byName.get(v.name);
+        r.total += 1;
+        r[v.verdict] += 1;
+        if (v.verdict !== 'change') continue;
+        r.mechs.add(v.mechanism);
+        if (WORK.has(v.mechanism)) r.work += 1;
+    }
+    const rows = [...byName.entries()].sort(
+        (a, b) =>
+            b[1].work - a[1].work ||
+            b[1].total - a[1].total ||
+            a[0].localeCompare(b[0]),
+    );
+    for (const [name, r] of rows) {
+        console.log(
+            `  ${name.padEnd(56)} ${String(r.total).padStart(3)} ${String(r.keep).padStart(3)}` +
+                ` ${String(r.change).padStart(4)} ${String(r.delete).padStart(4)}` +
+                ` ${String(r.work).padStart(4)}     ${[...r.mechs].join(' / ')}`,
+        );
+    }
+    const totalWork = rows.reduce((n, [, r]) => n + r.work, 0);
+    const noWork = rows.filter(([, r]) => r.work === 0).length;
+    console.log(
+        `\n  ${rows.length} names; ${noWork} need no fixture; ${totalWork} cases across ` +
+            `${rows.length - noWork} names do.`,
+    );
 }
