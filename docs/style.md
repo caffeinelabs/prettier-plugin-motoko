@@ -337,6 +337,15 @@ against `preserve` by construction, and that is expected rather than a defect:
   i.e. the `ifBreak` this printer does not emit; `preserve` prints `{}` alone.
 - `format('{\n}\nA\n')` → `'{};\nA;\n'`: the `;`s are again added, not preserved.
 
+Both rows are measured, and the first is worth a note on provenance. Only the
+second is a ported case (the ledger's `automatic semicolons[0]`); a bare `{\n}`
+never appears in the suite as a `format()` input, because every legacy case that
+opens that way continues. Its row is therefore checked against the 0.13.0 engine
+directly rather than read off the ledger, and
+`tools/probe/semicolon-cells.mts` measures all three rows in both engines and
+fails if one moves. `{\n}` → `{};\n` is that engine's real answer, not a
+reconstruction.
+
 Where the table and `preserve` agree — the between-items case — the expectations
 hold as written, because the source already had the separator. The others are
 restated here with the cell they exercise, so the port is a matter of naming
