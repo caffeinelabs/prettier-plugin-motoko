@@ -55,6 +55,7 @@ import {
     betweenSeparator,
     hasBlankLine,
     isComment,
+    isImport,
     isLineComment,
     listIndent,
     listItems,
@@ -322,6 +323,7 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
     if (items.length === 0) return '';
 
     const out: Doc[] = [];
+    const importEnd = importSectionEnd(items);
     for (let i = 0; i < items.length; i += 1) {
         const item = items[i];
         out.push(itemDoc(item, items, i, ctx));
@@ -346,7 +348,7 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
         );
 
         if (isLast) continue;
-        out.push(declarationBreak(items[i + 1]));
+        out.push(declarationBreak(items[i + 1], i === importEnd));
     }
 
     // The one hardline the file does not get from its own source. See the header: the source's tail
@@ -370,12 +372,59 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
  * the first declaration's line, and the source's blank-line rule cannot speak to it: the comment is
  * *between* the declarations, so it is `next`, and its own `breakParent` supplies the break before
  * `let p`. All this seam owes is the space that keeps the comment off its own line.
+ *
+ * ## The import section (the one blank line the printer *does* invent)
+ *
+ * `docs/style.md:114-130` asks for exactly one blank line after the last import, before the first
+ * declaration, and for none when the file has no imports. That is a blank line the printer invents,
+ * which the paragraph above says it never does — so it is the one documented exception, and it is
+ * checked before the source's own gap rather than after: under a glued section (`import A "A"; actor
+ * {}`) the source has no blank to keep, and the rule still wants one.
+ *
+ * The section is the *leading* run of imports, and the boundary is the first item that is neither an
+ * import nor a comment. Comments belong to the section rather than to the code below it: a file's
+ * header comment before its imports, and a note trailing them, are both part of "the imports", which
+ * is why the fixture's `import A "A";\n// import B "B";\nimport C "C";\nactor {}` gives its blank
+ * before `actor` and not before the commented-out import. That is also what 0.13.0 does, measured on
+ * the whole case list in `.probe/_impboth.mts`.
+ *
+ * Note this is checked by *position*, not by a "have we left the imports yet" flag that latches on
+ * the first non-import. The two agree on every valid file — an `import` after another declaration is
+ * a syntax error, `moc -dp` confirms — but only the positional reading survives a file the printer
+ * is asked to format anyway, and it is what the rule says: the blank goes after the last import.
  */
-function declarationBreak(next: ListItem): Doc {
+function declarationBreak(next: ListItem, endsImportSection: boolean): Doc {
     const commentOnThisLine =
         isComment(next.node) && (next.gap === null || !next.gap.includes('\n'));
     if (commentOnThisLine) return ' ';
+    if (endsImportSection) return [hardline, hardline];
     return blankIn(next.gap) ? [hardline, hardline] : hardline;
+}
+
+/**
+ * The index of the last item of the file's import section, or `-1` when the file has no imports — the
+ * section boundary `declarationBreak` needs. The rules it encodes, and why comments sit inside the
+ * run rather than after it, are in that function's header.
+ *
+ * Kept as a scan rather than a latched flag: the flag would have to be reset per file and carried
+ * through the loop, and the boundary is wanted once, which is cheaper to read computed in one place.
+ */
+function importSectionEnd(items: ListItem[]): number {
+    let sawImport = false;
+    let end = -1;
+    for (let i = 0; i < items.length; i += 1) {
+        if (isImport(items[i].node)) {
+            sawImport = true;
+            end = i;
+        } else if (isComment(items[i].node)) {
+            if (sawImport) end = i;
+        } else {
+            break;
+        }
+    }
+    // A comment *preceding* the imports is walked past by the loop, but `end` stays -1 until an
+    // import is seen — so a file of comments alone has no section, which is what `-1` reports.
+    return sawImport ? end : -1;
 }
 
 /**

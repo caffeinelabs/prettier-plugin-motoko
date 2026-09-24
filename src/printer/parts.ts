@@ -511,6 +511,21 @@ export function isComment(child: NormalChild): boolean {
     return COMMENT_KINDS.has(child.type);
 }
 
+/**
+ * Whether a child is an `import` declaration.
+ *
+ * Every surface form is the same node — `import A "A"`, `import { A; B } "x"`, `import C = "y"` all
+ * parse to `kind === 'import'` — so one kind check covers the three spellings and no token-text
+ * matching is needed.
+ *
+ * Only the file's blank-line rule asks this (`walk.ts`'s `declarationBreak`), which is why the
+ * predicate lives here beside `isComment` rather than in an area module: it is a property of the
+ * node, not of a list family.
+ */
+export function isImport(child: NormalChild): boolean {
+    return child.nodeType === 'Branch' && child.kind === 'import';
+}
+
 /** The bracket spellings that are ever list structure. Angles are included; see `isDelimiter`. */
 const BRACKETS: ReadonlySet<string> = new Set([
     '{',

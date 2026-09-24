@@ -253,6 +253,87 @@ const BLANK_LINES: Case[] = [
 ];
 
 /**
+ * The import-section rule, `docs/style.md:114-130`.
+ *
+ * This is the one place the printer **invents** a blank line, which is why it needs cases of its own
+ * rather than a line in `BLANK_LINES`: that table's rule is "kept, at most one, never invented", and
+ * a glued section is the exception that proves the two rules are distinct.
+ *
+ * The expected values are exactly the 0.13.0 suite's `double newline after import section` cases,
+ * carried over byte for byte, because the rule is "as today" (`docs/formatter-rework.md:110`) and the
+ * ported fixture is the specification. All seven of its cases pass unmodified — including the two
+ * that end `actor {…};`, whose trailing `;` comes from the *source* and is therefore reproduced like
+ * any other separator. The four extra cases at the end are the ones the ported suite did not reach
+ * and this printer's section boundary makes reachable: a section that ends the file, a leading blank
+ * with no imports, a header comment above the imports, and a block comment trailing them.
+ */
+const IMPORT_SECTION: Case[] = [
+    {
+        source: 'import A "A";\n\nactor {};\n',
+        printed: 'import A "A";\n\nactor {};\n',
+        why: 'a blank line the source already had is kept as the section blank',
+    },
+    {
+        source: 'import A "A";\nimport B "B";\n\nactor {};\n',
+        printed: 'import A "A";\nimport B "B";\n\nactor {};\n',
+        why: 'the blank goes after the last import, not after the first',
+    },
+    {
+        source: 'import A "A";\n// import B "B";\n\nactor {};\n',
+        printed: 'import A "A";\n// import B "B";\n\nactor {};\n',
+        why: 'a comment is part of the section, so the blank goes below it',
+    },
+    {
+        source: 'import A "A";\n// import B "B";\nimport { C } "C";\n\nactor {};\n',
+        printed:
+            'import A "A";\n// import B "B";\nimport { C } "C";\n\nactor {};\n',
+        why: 'a comment between two imports does not end the section',
+    },
+    {
+        source: 'import A "A"; actor {}',
+        printed: 'import A "A";\n\nactor {}\n',
+        why: 'a glued section gets a blank line invented for it — the rule is not "keep"',
+    },
+    {
+        source: 'import A "A";\n// import B "B";\nimport C "C";\nactor {};',
+        printed:
+            'import A "A";\n// import B "B";\nimport C "C";\n\nactor {};\n',
+        why: 'the invented blank still goes after the comments that trail the imports',
+    },
+    {
+        source: 'import A "A";\nimport {B} "B";\n// import C "C";\nactor A {\nabc\n};',
+        printed:
+            'import A "A";\nimport { B } "B";\n// import C "C";\n\nactor A { abc };\n',
+        why: 'a section whose comment trail ends the imports, with the list re-spaced',
+    },
+    {
+        source: 'import A "A";\nimport B "B";',
+        printed: 'import A "A";\nimport B "B";\n',
+        why: 'a file that is only imports gets no trailing blank — there is no declaration to separate',
+    },
+    {
+        source: '\n\nimport A "A";\nactor {}',
+        printed: 'import A "A";\n\nactor {}\n',
+        why: 'a leading blank before the section is dropped, and the invented one still appears',
+    },
+    {
+        source: '\n\nlet x = 1;',
+        printed: 'let x = 1;\n',
+        why: 'no imports means no leading blank, invented or kept',
+    },
+    {
+        source: '/* header */\nimport A "A";\nactor {}',
+        printed: '/* header */\nimport A "A";\n\nactor {}\n',
+        why: 'a header comment above the imports is inside the section, not a declaration',
+    },
+    {
+        source: 'import A "A";\n/* c */\nactor {}',
+        printed: 'import A "A";\n/* c */\n\nactor {}\n',
+        why: 'a block comment trailing the imports is part of the section too',
+    },
+];
+
+/**
  * Orthogonal constructs that reach the printer tail-first and would be easy to break by accident.
  *
  * These are not about lists or breaks; they are the cases that pin "the printer does not touch what
@@ -372,6 +453,31 @@ describe('preserve: blank lines', () => {
             expect(await format(c.source)).toBe(c.printed);
         },
     );
+});
+
+describe('preserve: the import section', () => {
+    test.each(IMPORT_SECTION.map((c) => [c.why, c] as const))(
+        '%s',
+        async (_why, c) => {
+            expect(await format(c.source)).toBe(c.printed);
+        },
+    );
+
+    // The rule is a *position*, so the property that matters is that the invented blank lands
+    // between the section and the code and nowhere else. Asserting the line directly is what makes
+    // this a test of the boundary rather than of the string, and it fails loudly if the blank ever
+    // drifts above a trailing comment — the one way this rule can be subtly wrong on real code,
+    // where 187 corpus files have a comment between the imports and the first declaration.
+    test('the blank lands below a comment that trails the imports', async () => {
+        const printed = await format(
+            'import A "A";\nimport B "B";\n// note\nactor {};',
+        );
+        const lines = printed.split('\n');
+        const blankAt = lines.indexOf('');
+        expect(blankAt).toBeGreaterThan(-1);
+        expect(lines[blankAt - 1]).toContain('// note');
+        expect(lines[blankAt + 1]).toContain('actor');
+    });
 });
 
 describe('preserve: untouched constructs', () => {
