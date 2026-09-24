@@ -22,4 +22,5 @@ target/
 # artifact the plan asks for, so it is written by hand from a run rather than rewritten by one.
 /tools/corpus/report.json
 /tools/corpus/RESULTS.md
+/tools/corpus/CHURN.md
 /tools/validate-moc2/divergences.json
