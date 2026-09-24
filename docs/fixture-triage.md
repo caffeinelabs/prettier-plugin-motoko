@@ -90,17 +90,55 @@ from 0.13 (37 throw, so 116 of the 252 that run):
   and a long tail of 1–4 case clusters.
 
 The operator clusters are mostly the **`preserve` printer keeping the source's spacing**, which is
-its contract: `a  ??  b` stays `a  ??  b` and `1-1` stays `1-1` where 0.13 canonicalised both. That
-is expected for M2 and is exactly what the `moc2` mode exists to change later — but it means these
-differences are _not_ automatically correct, because `-` and `+` are the one operator family
-[adjacency.md](adjacency.md) marks as **not** free-spaced (§2.9 lists what is safe to re-lay-out,
-and `-`/`+`/`^` operands are not in it; §3.1–3.2 name the bare-minus seams as grammar deviations).
-Each such case must be cross-checked against adjacency.md before its verdict, per the "the table wins
-and the test is a change" rule below.
+its contract: `a  ??  b` stays `a  ??  b` and `1-1` stays `1-1` where 0.13 canonicalised both.
+
+#### The null-coalesce cluster is not a spacing preference — 0.13 emitted invalid Motoko
+
+This was inherited as "the `preserve` printer keeping the source's spacing, which is its contract",
+with the 18 `??` cases filed under the same heading as `1-1` / `1 - 1`. Measured, the two clusters are
+not the same kind of thing. For all 18, 0.13's output is `a ??b` — the space is dropped **after** the
+operator and kept before it.
+
+[adjacency.md](adjacency.md) §2.4 already answers this and the answer was never propagated into this
+port's plan. Row **C2** of that table is `a ??b`, its "safe emission" column reads **never**, and its
+"required by" column reads `1x`,`2x`,`ts` all SYNTAX; the probe block below the table records the same
+thing as `coalesce-trail  SYNTAX SYNTAX SYNTAX`. §2.4's own explanation is that the `??` token is
+`alias(token(/\?\?[ \t\r\n]/), "??")` — **the trailing whitespace is part of the token**, so moc 2.0's
+lexer splits `??` into two `?` tokens when nothing follows it, which is why C2/C3 are syntax errors
+there. Independently re-measured here against the pinned oracle (`/tmp/mocnow/moc`, 2.0.0-beta.1):
+
+| source        | 0.13 emits  | new engine emits | moc 2.0 on 0.13's output                 |
+| ------------- | ----------- | ---------------- | ---------------------------------------- |
+| `a ?? b`      | `a ??b`     | `a ?? b`         | **`syntax error, unexpected token '?'`** |
+| `a ??b`       | `a ??b`     | `a ??b`          | **`syntax error, unexpected token '?'`** |
+| `a ?? b ?? c` | `a ??b ??c` | `a ?? b ?? c`    | **`syntax error`**                       |
+
+So `a ??b` is not a differently-canonicalised spelling of `a ?? b`; it is a **parse error**, and §2.4
+lists it beside `??`-as-two-options under "must never be split" rather than under any spacing rule. The
+consequence for the port: the 18 cases where the new engine differs from 0.13 are cases where the new
+engine is **right**, because 0.13 emitted code the compiler cannot read. These are not "expected
+`preserve` behaviour" — reproducing `??b` would be a correctness bug, and the fact that the ledger
+shows a diff here is the ledger working. So the verdict for the whole cluster is **change, and the
+change is a fix**; no per-case reconciliation against adjacency.md is needed, because moc has answered
+it and §2.4 had already recorded the answer.
+
+That leaves the genuinely-open part of the cluster much smaller than the raw count suggests. The
+remaining differences are the `preserve` contract itself — `a  ??  b` stays double-spaced, which is
+_C1_ and is fine — and `-`/`+` spacing, which [adjacency.md](adjacency.md) marks as **not**
+free-spaced (§2.9's safe-to-re-lay-out list excludes `-`/`+`/`^` operands; §3.1–3.2 name the
+bare-minus seams as grammar deviations). Each of _those_ cases must be cross-checked against
+adjacency.md before its verdict, per the "the table wins and the test is a change" rule below.
+
+Checked and closed, so nobody re-derives them: `1-1`, `1 - 1`, `1+1`, `1./+5` and both spellings of
+`(m with a = 1; b = 2) actor {}` are **all valid** to moc 2.0 — ordinary arithmetic is not a
+correctness risk, and the risk is confined to the head/branch seams adjacency.md names. This must be
+measured with the build the oracle pins — `MOC = "/tmp/mocnow/moc"` in `tools/probe/moc-validity.py`,
+2.0.0-beta.1 — and **not** one of the 1.16.1 dev builds that litter `/tmp`; they disagree on grammar,
+and picking the wrong one has already produced one wrong "correction" to `adjacency.md`.
 
 So "every semicolon test is a change" is right but is **14 cases, not a majority**. The bulk of the
 port's work is the operator-spacing tail, and each of those cases needs a verdict from the ledger
-rather than from this prose.
+rather than from this prose — with the 18 `??` cases now having one.
 
 ### Semicolons and trailing delimiters — all **change**
 
