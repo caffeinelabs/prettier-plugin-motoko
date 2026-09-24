@@ -237,13 +237,26 @@ function listItemsDoc(
             // The trailing separator reproduces the source's, exactly — see `trailingSeparator`,
             // which is the one place that decision is made and documents why the decision table's
             // layout-dependent column is not implementable under the runtime guard.
-            out.push(trailingSeparator(list.family, item.separated));
+            out.push(
+                trailingSeparator(
+                    list.family,
+                    item.separated,
+                    isLineComment(item.node),
+                ),
+            );
             continue;
         }
 
         const next = items[i + 1];
         if (item.separated) {
-            out.push(betweenSeparator(list.family, printed, next.gap));
+            out.push(
+                betweenSeparator(
+                    list.family,
+                    printed,
+                    next.gap,
+                    isLineComment(item.node),
+                ),
+            );
         } else {
             out.push(separatorLine(printed, next.gap));
         }
@@ -316,7 +329,17 @@ function sourceFileDoc(node: NormalBranch, ctx: WalkOptions): Doc {
         // inter-declaration `;` the source omitted must stay omitted. Emitting one "because the
         // grammar requires it between two declarations" would be *safe* for the parser and still
         // wrong for the guard, which reports a child-count change rather than a parse failure.
-        out.push(item.separated ? ';' : '');
+        //
+        // A declaration is never a comment, but a *comment* can be a source-file item in its own
+        // right, and `let o = 1 // c` / `;` makes exactly that true: the `;` is the comment's own
+        // separator, so it falls to `trailingSeparator` and to the leading-separator rule there.
+        out.push(
+            trailingSeparator(
+                'semi_sep',
+                item.separated,
+                isLineComment(item.node),
+            ),
+        );
 
         if (isLast) continue;
         out.push(blankIn(next?.gap ?? null) ? [hardline, hardline] : hardline);

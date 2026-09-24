@@ -301,6 +301,18 @@ export function separatorLine(left: Doc, gap: string | null): Doc {
 }
 
 /**
+ * The separator character a list family spells its items' separators with.
+ *
+ * The one decision here is that the *family* picks the character and the node's text never does. A
+ * list's `separated` flag records only that a separator stood somewhere in the seam; the spelling is
+ * the family's. Reading the token's own text would agree for the families there are today and would
+ * quietly print the wrong character the day one grammar admits both.
+ */
+function separatorChar(family: ListFamily): Doc {
+    return family === 'comma_sep' ? ',' : ';';
+}
+
+/**
  * The trailing separator after the last item: the source's, reproduced exactly, or nothing.
  *
  * ## Why this reproduces rather than decides
@@ -333,23 +345,71 @@ export function separatorLine(left: Doc, gap: string | null): Doc {
  * stood here, and the family says which spelling it was — `;` for the brace lists, `,` for the
  * bracket ones. Reading `node.text` instead would be equivalent for these two and would quietly
  * print the wrong character if a future grammar let a list admit both.
+ *
+ * ## When the last item is a line comment, the separator leads the following line
+ *
+ * Same seam as `betweenSeparator`, and the same reason: the item before the separator is a `//` and
+ * anything appended to it is inside the comment. `f(a, b // c\n,)` printed as `// c,` loses the
+ * comma. The separator therefore goes on the line after the comment — the mirror of
+ * `betweenSeparator`'s break-then-separator, and the last-item half of the same rule.
+ *
+ * It only applies to the *separated* case, which is the only one that emits anything: an
+ * unseparated last item emits `''`, and a `''` has nothing to swallow. That also keeps this narrow —
+ * the common `f(a, b)` and `f(a, b // c)` shapes are untouched.
  */
-export function trailingSeparator(family: ListFamily, separated: boolean): Doc {
+export function trailingSeparator(
+    family: ListFamily,
+    separated: boolean,
+    lastIsLineComment = false,
+): Doc {
     if (!separated) return '';
-    return family === 'comma_sep' ? ',' : ';';
+    const sep = separatorChar(family);
+    return lastIsLineComment ? [hardline, sep] : sep;
 }
 
 /**
  * The separator printed *between* two items. Always present for `semi_sep`/`semi_sep1`, and this is
  * the one that `semi: false` must never touch (`docs/semicolons.md` §4's negative control:
  * `func f() { a; b }` → `a b` re-glues into an application with no error).
+ *
+ * ## The separator goes *before* the break, not after the left item
+ *
+ * `left` is the left item's printed doc, and for every item that is *code* the separator belongs at
+ * the end of it: `a,` then a break. A **line comment** is the one item where that is wrong, and it is
+ * wrong silently — `commentDoc` is `[verbatim(node), breakParent]`, so the comment's text is already
+ * terminated by a forced break and anything appended after it lands *inside* the comment, because a
+ * `//` runs to the newline. `[',', ...]` after `// c` prints `// c,`: the separator is swallowed and
+ * the list loses it.
+ *
+ * So for a comment the order flips to break-then-separator, which is the only spelling that ends the
+ * comment first:
+ *
+ *     f(
+ *       a
+ *       // c
+ *       ,
+ *       b
+ *     );
+ *
+ * That is a **line-leading separator**, and it is not an invention — the corpus already writes them
+ * (`../motoko/test/repl/lib/type-lub.mo` leads seven lines with `,`). moc accepts both spellings;
+ * `.probe/_cfitems.mts` is the measurement that the three target forms parse with 0 syntax errors.
+ *
+ * `isLineComment` is a parameter rather than a `willBreak(left)` test on purpose. Those are not the
+ * same question: `willBreak` is also true for an item that merely *contains* a comment, and moving
+ * the separator for one of those would detach the `,` from its own item — a rewrite the guard would
+ * catch, and worse output than the bug. The caller has the node, so the caller answers the narrow
+ * question. `separatorLine` still receives `left` for the break *after* the separator, which is a
+ * different decision and keeps its own rules.
  */
 export function betweenSeparator(
     family: ListFamily,
     left: Doc,
     gap: string | null,
+    leftIsLineComment = false,
 ): Doc {
-    const sep = family === 'comma_sep' ? ',' : ';';
+    const sep = separatorChar(family);
+    if (leftIsLineComment) return [hardline, sep, separatorLine(left, gap)];
     return [sep, separatorLine(left, gap)];
 }
 

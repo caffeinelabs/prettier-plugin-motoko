@@ -597,6 +597,32 @@ let o = {
 };
 ```
 
+- When a line comment is itself a list item, the **separator goes on the line
+  after it**, not on the comment's line. A `//` runs to the newline, so a
+  separator printed after one is *inside* the comment and the list loses it.
+  This is a correctness rule rather than a taste one: the printer used to emit
+  `// c,` here, which drops the comma, and it did so on input `moc` accepts.
+
+```motoko no-repl
+// before — the comment is the item, so the comma must lead its own line
+let g = call(a // c
+             , b);
+// after
+let g = call(
+  a
+  // c
+  ,
+  b
+);
+```
+
+  The corpus writes leading separators already
+  (`test/repl/lib/type-lub.mo` leads seven lines with `,`), and `moc` accepts
+  both spellings, so this is a layout change and not a spelling one. A **block**
+  comment is not this case: it ends at its own delimiter, so a separator after
+  it is already outside and stays glued to the item — which is why the rule
+  keys on the comment's kind and not on "the item contains a comment".
+
 - Comment attachment follows Prettier's model. The tree-sitter parser's tree is
   flattened to plain objects and the comments are hoisted into `ast.comments`;
   Prettier attaches them. `prettier-ignore` is handled by the standard
