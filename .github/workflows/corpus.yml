@@ -26,11 +26,12 @@
 #                                      at. Recorded, NOT a binary selector: the AST oracle runs
 #                                      whichever moc the search finds, and the report names that
 #                                      binary and its version.
-#     --require-oracle                 fail the run when no moc binary is found. CI should normally
-#                                      NOT pass this until the job provisions moc (see the note on
-#                                      the oracle below); without it an oracle-less run reports
-#                                      "oracle: not run" and still exits 0, which is honest on a
-#                                      developer machine and a silent hole on a runner.
+#     --require-oracle                 fail the run when no moc binary is found. This job PASSES it,
+#                                      because the "Provision moc" step guarantees a binary; if that
+#                                      step's asset or URL ever changes, the run must fail loudly
+#                                      rather than report a green three-layer run. A developer
+#                                      machine without moc still gets "oracle: not run" and exit 0,
+#                                      which is honest there and a hole here.
 #     --report <path>                  markdown, as assumed
 #   CORPUS_MOTOKO_REV / CORPUS_ORACLE_REV are also passed as env vars as a convenience; the flags
 #   are the contract. If the harness ever takes a revision some other way, CHANGE THIS FILE to
@@ -57,14 +58,21 @@
 #       projects angle lists by node text, so it is blind to the `L8` seam where a broken list
 #       drops its close onto its own line and `moc` reads it as a greater-than operator. Those
 #       seams are pinned by tests/adjacency.test.ts; this job cannot see them.
-#     - THE MOC AST ORACLE IS A SEPARATE, STRONGER LAYER, and it does not run here yet. It feeds
-#       the input and the printed output to `moc -dp` and requires the same tree, which catches
-#       readings OUR grammar gets wrong -- exactly the blind spot the line above describes. It is
-#       found by searching for a moc binary (MOC=<path> overrides); this runner has none, so the
-#       report says `oracle: not run` and the job still exits 0. To make it real on CI, add a step
-#       that builds the pinned head (docs/grammar-deviations.md) or downloads a release binary,
-#       then pass --require-oracle so the job fails rather than silently skipping the check. Until
-#       then, treat a green run here as three layers green and the fourth unmeasured.
+#     - THE MOC AST ORACLE IS A SEPARATE, STRONGER LAYER, and this job now runs it. It feeds the
+#       input and the printed output to `moc -dp` and requires the same tree, which catches readings
+#       OUR grammar gets wrong -- exactly the blind spot the line above describes. The "Provision
+#       moc" step below downloads a release binary and exports MOC=<path>, and the run passes
+#       --require-oracle, so a missing binary fails the job instead of silently degrading to three
+#       layers. It used to be unmeasured here; the note that said so is replaced by the step that
+#       closed it.
+#       Lane note: this provisions the RELEASE moc (1.x), which is the corpus's own compiler and the
+#       binary every published number is quoted against. The v2 target syntax is M3's business and
+#       is validated separately against the #6385 head (docs/formatter-rework.md, "Validating
+#       `moc2` on the compiler repo"), so nothing here should be read as a v2 claim.
+#       The version is pinned rather than "latest" for the same reason the corpus revision is: a
+#       green run has to mean the same thing next week. Bumping it is a deliberate edit, and the
+#       release notes for the new tag are the place to check for `-dp` output changes, which would
+#       show up here as oracle mismatches rather than as printer bugs.
 #     - `--repos` defaults to this repo's parent, so the sibling package sets are absent unless
 #       something checked them out; the report says which units were unreachable. This job clones
 #       only the compiler (see the clone step), so the package sets appear as counted skips.
@@ -133,6 +141,36 @@ jobs:
                   git -C ../motoko checkout --detach FETCH_HEAD
                   echo "corpus at $(git -C ../motoko rev-parse HEAD)"
 
+            # The moc AST oracle needs a moc binary, and the runner has none. This downloads the
+            # pinned release asset and exports MOC so the harness picks it up (MOC wins over every
+            # path the oracle searches -- see mocCandidates in tools/corpus/lib/moc-oracle.mjs).
+            #
+            # Why a release asset and not a source build: the asset is one curl, it carries the same
+            # version string the report records (`moc --version`), and the oracle only asks for
+            # `-dp` -- a parse dump, which no test-time feature gate changes. Building the pinned
+            # #6385 head would take minutes per run and buys nothing here, because our grammar's
+            # deviations are measured against the release moc that the corpus ships with. (M3 builds
+            # its own toolchain against #6385; that is a different layer and a different workflow.)
+            #
+            # Pinned on purpose: see the lane note in the header. The x86_64/linux name is fixed
+            # because this job is `ubuntu-latest`; if the job ever moves to an arm runner the name
+            # has to move with it, and the failure would be the tar or the exec below rather than
+            # anything downstream.
+            - name: Provision moc
+              run: |
+                  MOC_VERSION=1.16.1
+                  ASSET="motoko-Linux-x86_64-${MOC_VERSION}.tar.gz"
+                  curl -sSL -o "/tmp/${ASSET}" \
+                    "https://github.com/caffeinelabs/motoko/releases/download/${MOC_VERSION}/${ASSET}"
+                  mkdir -p "$HOME/moctar"
+                  tar xzf "/tmp/${ASSET}" -C "$HOME/moctar"
+                  chmod +x "$HOME/moctar/moc"
+                  # Assert it is the compiler we asked for before the corpus run depends on it: a
+                  # wrong-platform asset or a changed tarball layout must fail HERE, with a message
+                  # that says which, rather than as a mysterious oracle mismatch later.
+                  echo "MOC=$HOME/moctar/moc" >> "$GITHUB_ENV"
+                  "$HOME/moctar/moc" --version
+
             - name: Verify the harness contract
               run: |
                   if [ ! -f tools/corpus/run.mjs ]; then
@@ -157,11 +195,18 @@ jobs:
                     --job all \
                     --motoko-rev "$CORPUS_MOTOKO_REV" \
                     --oracle-rev "$CORPUS_ORACLE_REV" \
+                    --require-oracle \
                     --report tools/corpus/RESULTS.md
 
             # The runner is about to be thrown away, so an artifact is the only way to read the
-            # report. It also publishes the report on green runs, which is where the M1 exit
-            # number (96.4% as of 2026-09-23) and the unreachable-unit list get tracked over time.
+            # report. It also publishes the report on green runs, which is where the two numbers
+            # that move get tracked over time: the parse rate against the known deviation set, and
+            # the unreachable-unit list. Both are now printer-denominated as well (`printed +
+            # not-formattable === units`), so the report carries four counts where M1 tracked one.
+            #
+            # Do NOT quote a number here. The file this comment used to name (96.4%, M1, 2026-09-23)
+            # is a parse rate from before the printer was on, and it is stale by construction -- a
+            # number in a comment is read as current long after it is. Read the uploaded report.
             - name: Upload the corpus report
               if: always()
               uses: actions/upload-artifact@v4
