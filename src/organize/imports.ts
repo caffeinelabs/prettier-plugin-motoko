@@ -1,10 +1,8 @@
 /**
- * Rewrites a file's leading import section as text, before it is parsed.
+ * Rewrites a file's leading import section as text, for the caller to re-parse.
  *
- * Organizing changes the token sequence: combining statements deletes an `import` and a `;`, and dropping `import {} "p"` deletes one.
- * So the rewritten text is re-parsed, and the runtime guard compares the printer's output with the organized tree.
- * The guard can't see the rewrite itself, which is why `bindingsPreserved` checks that every binding survives it.
- * Anything this pass doesn't understand returns `null` rather than a partial rewrite, so a section it can't read is left as written.
+ * Re-parsing is needed because organizing changes the token sequence: combining statements deletes an `import` and a `;`,
+ * and `import {} "p"` is dropped entirely.
  * The emitted imports are exactly what the printer would print for them, so a second run is a fixed point.
  */
 
@@ -16,11 +14,11 @@ import type {
 import { MotokoSyntaxError, parse as parseMotoko } from '../parser/parse.ts';
 import { isComment, isImport } from '../printer/parts.ts';
 
-/** Emit order: `ic:`, `canister:`, `mo:`, then relative paths. `''` is the catch-all, so it must stay last. */
+/** Emit order: `ic:`, `canister:`, `mo:`, then everything else. `''` matches any path, so it must stay last. */
 const IMPORT_GROUPS: readonly string[] = ['ic:', 'canister:', 'mo:', ''];
 
 interface ImportClause {
-    /** Decoded; used for grouping and sorting. */
+    /** Decoded, for grouping, sorting and comparing bindings. */
     path: string;
     /** The literal as written, quotes included, reused verbatim so escapes survive. */
     pathText: string;
@@ -62,9 +60,9 @@ function leadingTokenText(node: NormalChild): string | null {
 /**
  * Detects an import missing its `;` before another import.
  *
- * The grammar accepts `import` as an identifier in expression position, so the next `import Text "mo:base/Text"` parses as a call.
- * `isImport` rightly rejects that node, but ending the section there leaves the remaining imports in `tail`, which gets re-spaced,
- * so the output is no longer a fixed point. moc rejects the shape, so the pass refuses rather than inventing the missing `;`.
+ * The grammar accepts `import` as an identifier, so after an import missing its `;` the next `import Text "mo:base/Text"` parses as a call.
+ * Ending the section there would invent the missing `;` and leave the later imports in `tail`, which a second run would then organize.
+ * moc rejects the shape, so the pass refuses instead.
  */
 function beginsWithImportKeyword(node: NormalChild): boolean {
     return leadingTokenText(node) === 'import';
@@ -223,7 +221,6 @@ function readSection(root: NormalBranch): Section | null {
             continue;
         }
 
-        // See `beginsWithImportKeyword`.
         if (beginsWithImportKeyword(item)) return null;
 
         break;
@@ -354,7 +351,7 @@ async function bindingsPreserved(
  *
  * A section containing any `=` is emitted with `=` on every statement, since combined statements have no single source spelling.
  * Returns `null`, never a partial rewrite, when the section can't be read,
- * when the emitted imports would lose a binding, or when nothing changes.
+ * when the emitted imports don't re-parse to the same bindings, or when nothing changes.
  */
 export async function organizeImportSection(
     source: string,

@@ -1,5 +1,5 @@
 // Inputs moc rejects: the formatter must reject them too, with a located error and a code frame.
-// Each directory under `tests/refusals/` is formatted with the options in `AREA_OPTIONS`.
+// Each directory under `tests/refusals/` is formatted with its `AREA_OPTIONS` entry, if any.
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
