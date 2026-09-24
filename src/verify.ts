@@ -3,8 +3,7 @@
  *
  * A printer bug is caught by a parse rather than by review, so it cannot ship a silent meaning change even if fixtures miss the case.
  * The comparison is structural because reformatting moves every offset and gap, so a textual one would fail on correct output.
- * `shapeOf` reports every difference; the tolerance list below is applied here rather than inside `shapeOf`,
- * so a rewrite that adds an unforgiven node still fails.
+ * The tolerance list is applied in `compareShapes` rather than inside `shapeOf`, so a rewrite that adds an unforgiven node still fails.
  */
 
 import { parse } from './parser/parse.ts';
@@ -32,8 +31,8 @@ interface Tolerance {
     readonly reason: string;
 }
 
-// Empty: with no rewrite passes, `preserve` must be exactly structure-preserving. Each rewrite rule adds one entry for the kind it edits,
-// never a default, so the guard still sees printer bugs like dropped parens.
+// Empty, so output must be exactly structure-preserving. A rewrite gets one entry per kind it edits, never a default,
+// so the guard still sees printer bugs like dropped parens.
 const TOLERATED_KINDS: ReadonlyMap<string, Tolerance> = new Map();
 
 function tolerated(shape: unknown): boolean {
@@ -45,9 +44,9 @@ function tolerated(shape: unknown): boolean {
 export interface ShapeDifference {
     /** Dotted path of child indices from the root. */
     path: string;
-    /** What the input tree had, or `null` if the output tree added this node. */
+    /** The input tree's shape at `path`, or its child count when the two child lists differ in length. */
     input: unknown;
-    /** What the output tree has, or `null` if the output tree dropped this node. */
+    /** The output tree's shape at `path`, or its child count. */
     output: unknown;
 }
 
@@ -86,7 +85,6 @@ export function compareShapes(
 ): ShapeDifference | null {
     if (input === null && output === null) return null;
 
-    // `shapeOf` drops gaps from child lists, so one `null` side here means a real node on the other.
     if (typeof input === 'string' && typeof output === 'string') {
         return sameToken(input, output)
             ? null
@@ -143,7 +141,6 @@ export function compareShapes(
  * Re-parse `printed` and throw `VerifyError` on the first difference from `expected`.
  *
  * `expected` is the input tree, not one the printer produced, or the check would be vacuous.
- * A rewriting syntax such as `moc2` passes the rewritten tree instead, since the rewrite is the intended change.
  */
 export async function verifyOutput(
     expected: NormalNode,

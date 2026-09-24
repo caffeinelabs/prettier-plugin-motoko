@@ -313,7 +313,6 @@ export function isLineComment(node: NormalChild): boolean {
     return node.kind === 'line_comment';
 }
 
-/** Exported so a test can assert the printer's dispatch covers the table. */
 export function listKinds(): NodeKind[] {
     return Object.keys(LISTS) as NodeKind[];
 }

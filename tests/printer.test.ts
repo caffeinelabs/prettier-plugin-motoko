@@ -32,7 +32,7 @@ interface Case {
     readonly why: string;
 }
 
-// A list that fits goes on one line. `preserve` may not add or remove a separator, so `(1,)` keeps its comma.
+// A list that fits goes on one line.
 const LAYOUT: Case[] = [
     {
         source: 'let t = (1,2)',
@@ -260,7 +260,7 @@ const IMPORT_SECTION: Case[] = [
     },
 ];
 
-// Constructs the printer must not touch. The number-dot seam in `1.toText()` is lexical, so a space there changes the tokens.
+// Constructs the printer must not touch.
 const UNTOUCHED: Case[] = [
     {
         source: 'let r = 1.toText()',
@@ -377,7 +377,6 @@ describe('preserve: the import section', () => {
         },
     );
 
-    // The blank must land between the trailing comment and the code, not above the comment.
     test('the blank lands below a comment that trails the imports', async () => {
         const printed = await format(
             'import A "A";\nimport B "B";\n// note\nactor {};',
@@ -444,9 +443,7 @@ describe('preserve: idempotence and options', () => {
  * A broken angle list must glue its `>` to the last item, and only output assertions can check it.
  *
  * moc lexes a `>` with whitespace on both sides as the greater-than operator, so a close pushed onto its own line is a syntax error.
- * `shapeOf` projects `typ_params` and `inst` by node text, so the runtime guard cannot see the difference,
- * and idempotence holds on the broken output.
- * Breaking after the opening `<` is accepted, so only the close is glued.
+ * `shapeOf` drops whitespace gaps, so the runtime guard cannot see the difference, and idempotence holds on the broken output.
  */
 describe('preserve: the angle close', () => {
     /** Every `typ_params`/`inst` node whose closing `>` is detached from the last item. */

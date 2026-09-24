@@ -4,7 +4,7 @@
  * Output must mean the same under moc 1.x and moc 2.0.
  * tree-sitter-motoko, the formatter's own parser, disagrees with moc in both directions, so no decision here is delegated to it.
  * Every other token pair is free-spaced and left to the area printers.
- * Every area printer imports this module, so it depends on nothing but prettier's doc builders to stay out of import cycles.
+ * It depends on nothing but prettier's doc builders, so any printer can import it without an import cycle.
  */
 
 import { doc } from 'prettier';
@@ -23,10 +23,7 @@ export type Verb =
     /** Not a seam. */
     | 'free';
 
-/**
- * Joins docs with nothing between them. Prettier keeps a `line` between siblings as a legal break, so a glued pair must be one concat.
- * This is the only zero-width join in the module, so glued seams are greppable.
- */
+/** Joins docs with nothing between them. Prettier keeps a `line` between siblings as a legal break, so a glued pair must be one concat. */
 export function glue(...parts: Doc[]): Doc {
     return parts.length === 0 ? '' : parts.length === 1 ? parts[0] : parts;
 }

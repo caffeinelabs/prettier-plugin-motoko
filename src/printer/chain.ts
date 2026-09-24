@@ -70,7 +70,7 @@ function planChain(node: NormalBranch): Chain | null {
             continue;
         }
 
-        // `call_exp`. Two children when the source wrote `.name(`, three when it wrote `.name (`.
+        // Two children when the source wrote `.name(`, three when it wrote `.name (`.
         if (branch.kind === 'call_exp') {
             if (children.length !== 2 && children.length !== 3) return null;
             const [callee, ...tail] = children;
