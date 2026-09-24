@@ -1,7 +1,8 @@
-import type { Parser, Plugin, SupportLanguage } from 'prettier';
+import type { Parser, Plugin, Printer, SupportLanguage } from 'prettier';
 
 import { parse as parseMotoko } from './parser/parse.ts';
 import type { NormalBranch, NormalChild } from './parser/normalize.ts';
+import { createPrinter, rememberRoot } from './printer/walk.ts';
 
 export const AST_FORMAT = 'motoko-ast';
 
@@ -22,7 +23,9 @@ const languages: SupportLanguage[] = [
 ];
 
 async function parse(text: string): Promise<NormalBranch> {
-    return (await parseMotoko(text)).root;
+    const result = await parseMotoko(text);
+    rememberRoot(result);
+    return result.root;
 }
 
 const parser: Parser<NormalChild> = {
@@ -37,8 +40,12 @@ const parsers: Record<string, Parser> = {
     [PARSER_MOTOKO_TT_PARSE]: parser,
 };
 
-const plugin: Plugin = { languages, parsers };
+const printers: Record<string, Printer> = {
+    [AST_FORMAT]: createPrinter() as Printer,
+};
 
-export { languages, parsers };
+const plugin: Plugin = { languages, parsers, printers };
+
+export { languages, parsers, printers };
 
 export default plugin;

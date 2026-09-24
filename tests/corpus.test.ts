@@ -1,7 +1,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+import prettier from 'prettier';
 import { describe, expect, test } from 'vitest';
+
+import plugin from '../src/index.ts';
 
 import { MotokoSyntaxError, parse } from '../src/parser/parse.ts';
 import { checkRoundTrip } from '../src/parser/normalize.ts';
@@ -68,4 +71,37 @@ describe.skipIf(files.length === 0)('corpus', () => {
         expect(mismatches, 'the round-trip lost text').toEqual([]);
         expect(rejected.sort()).toEqual([...KNOWN_REJECTIONS].sort());
     });
+
+    test(
+        'every file that parses formats, and formatting again changes nothing',
+        { timeout: 300_000 },
+        async () => {
+            const failures: string[] = [];
+            const unstable: string[] = [];
+            for (const file of files) {
+                const source = readFileSync(file, 'utf8');
+                const options = {
+                    parser: 'motoko',
+                    plugins: [plugin],
+                    filepath: file,
+                };
+                let once: string;
+                try {
+                    once = await prettier.format(source, options);
+                } catch (error) {
+                    if (!(error instanceof MotokoSyntaxError)) {
+                        failures.push(
+                            `${display(file)}: ${(error as Error).message.split('\n')[0]}`,
+                        );
+                    }
+                    continue;
+                }
+                if ((await prettier.format(once, options)) !== once) {
+                    unstable.push(display(file));
+                }
+            }
+            expect(failures, 'formatting threw').toEqual([]);
+            expect(unstable, 'a second format changed the output').toEqual([]);
+        },
+    );
 });
