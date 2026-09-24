@@ -2,29 +2,34 @@
 
 A [Prettier](https://prettier.io/) plugin that formats the Motoko language, plus a standalone `mo-fmt` CLI.
 
+The plugin is being rebuilt on the [tree-sitter-motoko](https://github.com/caffeinelabs/tree-sitter-motoko) grammar; `docs/formatter-rework.md` is the plan.
+The published 0.13 engine lives on `release/0.13`, which takes critical fixes only.
+
 ## Build, test, format
 
-Run from the repository root:
+Run from the repository root, on Node 22 or later:
 
-- Install: `npm ci` (prettier is also a devDependency, so no separate install is needed).
-- Build: `npm run build` (builds the Rust wasm crate, then compiles TypeScript to `lib/`).
-- Test: `npm test` (rebuilds the Node wasm target, then runs Jest). Use `npm run test:quick` to run Jest without rebuilding wasm.
-- Format the codebase: `npx prettier --write .` (this repo's own `.prettierrc` uses 4-space indent, single quotes, semicolons, and trailing commas everywhere).
+- Install: `npm ci`.
+- Build: `npm run build` (compiles `src/` to `lib/` and copies the grammar and runtime wasm into `lib/parser/`).
+- Test: `npm test` (Vitest, runs the TypeScript sources directly).
+- Typecheck: `npm run typecheck` (sources, then tests and tools).
+- Format the codebase: `npx prettier --write .` (4-space indent, single quotes, semicolons, trailing commas).
 
-Building wasm requires the Rust toolchain and `wasm-pack`.
+The corpus test needs the compiler and motoko-core checked out as siblings, `../motoko` and `../motoko-core`; without them it is skipped.
+CI pins both revisions in `.github/workflows/tests.yml` and sets `MOTOKO_CORPUS_REQUIRED` so a missing checkout fails instead of skipping.
 
 ## Layout
 
-- `src/` — TypeScript plugin source. `parsers/` and `printers/` implement the Prettier parse/print pipeline; `environments/` has separate `node` and `web` entry points.
-- `wasm/` — Rust crate compiled to WebAssembly (wraps the `motoko` parser); output goes to `wasm/pkg/`.
-- `packages/mo-fmt/` — separate npm package for the standalone CLI, with its own `package.json`, scripts, and dependencies. Build/test it from inside that directory (e.g. `npm --prefix packages/mo-fmt ci`).
-- `tests/` — Jest suites. `tests/test-webapp/` verifies the web build.
+- `src/parser/` — tree-sitter initialisation, the normalised tree, and syntax errors.
+- `src/parser/nodes.generated.ts` — generated from the grammar by `npm run gen:node-types`; never hand-edit it. CI checks it is current.
+- `tools/` — the node-type generator and the build's wasm copy step.
+- `tests/` — Vitest suites; `tests/fixtures/` holds parser fixtures for rare constructs.
+- `packages/mo-fmt/` — the standalone CLI, still on the 0.13 plugin from npm until it is rebuilt. Build and test it from inside that directory.
 
 ## Conventions and gotchas
 
-- Generated / never hand-edit: `lib/` (tsc output), `wasm/pkg/` and `wasm/target/` (wasm-pack/cargo output). All are gitignored.
-- `wasm-bindgen` and `serde-wasm-bindgen` are pinned to exact versions in `wasm/Cargo.toml`; keep them in sync with the installed `wasm-pack`.
+- `lib/` is generated and gitignored.
+- `tree-sitter-motoko` and `web-tree-sitter` are pinned exactly: a grammar minor bump changes tree shapes, and the runtime must load the grammar's ABI. After bumping the grammar, run `npm run gen:node-types`.
+- The grammar is a devDependency only. Its install script builds native bindings, so the build copies its wasm into `lib/` instead of depending on it at runtime.
 - `.npmrc` sets `min-release-age=7`, so newly published dependency versions are held back for 7 days.
-- CI (`.github/workflows/tests.yml`) runs on Node 22 and 24, gates on `npm run typecheck` and `npm run format:check`, builds `tests/test-webapp` in a separate job, and clones `https://github.com/dfinity/motoko` into `../motoko` (a sibling of this repo) before testing. The compiler-suite test (currently skipped) reads Motoko test files from that path.
-- The release workflow builds the standalone `mo-fmt` binaries on Node 22 with `@yao-pkg/pkg` (`node22-*` targets, host arch, so x64 in CI). The plugin's wasm uses reference types, which the embedded Node runtime must support; smoke-test a packaged binary on a `.mo` file (format and `--check`) when touching this path, not just that packaging exits 0.
 - Releases are triggered only by changes to `packages/mo-fmt/package.json` on `main` (`.github/workflows/release.yml`), which tags from that file's `version`.
