@@ -185,7 +185,7 @@ describe('parse: rejected input', () => {
         const syntaxError = error as MotokoSyntaxError;
         expect(syntaxError.loc.start.line).toBe(1);
         // On the `@`, not on the `=` the outer ERROR node starts at.
-        expect(syntaxError.loc.start.column).toBe(8);
+        expect(syntaxError.loc.start.column).toBe(9);
         expect(syntaxError.codeFrame).toContain('let x = @@@ ;');
         expect(syntaxError.codeFrame).toContain('^');
     });

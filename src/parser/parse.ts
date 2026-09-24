@@ -4,7 +4,7 @@ import { createParser } from './tree-sitter.ts';
 import { normalize } from './normalize.ts';
 import type { NormalBranch, NormalChild } from './normalize.ts';
 
-/** 1-based line, 0-based column. */
+/** 1-based line and column, as Prettier's code frame expects. */
 export interface SyntaxErrorLocation {
     start: { line: number; column: number };
     end?: { line: number; column: number };
@@ -105,8 +105,8 @@ function syntaxError(source: string, problem: Problem): MotokoSyntaxError {
     return new MotokoSyntaxError(
         `${what} at ${start.row + 1}:${start.column + 1}.`,
         {
-            start: { line: start.row + 1, column: start.column },
-            end: { line: end.row + 1, column: end.column },
+            start: { line: start.row + 1, column: start.column + 1 },
+            end: { line: end.row + 1, column: end.column + 1 },
         },
         codeFrame(source, start.row, start.column),
     );
