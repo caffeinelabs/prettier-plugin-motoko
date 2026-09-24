@@ -1,6 +1,16 @@
-import type { Parser, Plugin, Printer, SupportLanguage } from 'prettier';
+import type {
+    Parser,
+    ParserOptions,
+    Plugin,
+    Printer,
+    SupportLanguage,
+    SupportOptions,
+} from 'prettier';
+
+import { organizeImportSection } from './organize/imports.ts';
 
 import { parse as parseMotoko } from './parser/parse.ts';
+import type { ParseResult } from './parser/parse.ts';
 import type { NormalBranch, NormalChild } from './parser/normalize.ts';
 import { createPrinter, rememberRoot } from './printer/walk.ts';
 
@@ -24,11 +34,38 @@ const languages: SupportLanguage[] = [
     },
 ];
 
-async function parse(text: string): Promise<NormalBranch> {
-    const result = await parseMotoko(text);
+const options: SupportOptions = {
+    motokoOrganizeImports: {
+        category: 'Motoko',
+        type: 'boolean',
+        default: false,
+        description: 'Sort, group and combine the import section.',
+    },
+};
+
+async function parse(
+    text: string,
+    options: ParserOptions,
+): Promise<NormalBranch> {
+    const original = await parseMotoko(text);
+    const result = options.motokoOrganizeImports
+        ? ((await organized(original)) ?? original)
+        : original;
     // The printer's runtime guard compares its output against this tree, so it needs the source too.
     rememberRoot(result);
     return result.root;
+}
+
+/**
+ * The organized source, re-parsed, or `null` when there is nothing to change.
+ * The guard then compares the printer's output with the organized tree, so reordering imports is not a guard failure.
+ */
+async function organized(original: ParseResult): Promise<ParseResult | null> {
+    const rewritten = await organizeImportSection(
+        original.source,
+        original.root,
+    );
+    return rewritten === null ? null : parseMotoko(rewritten);
 }
 
 const parser: Parser<NormalChild> = {
@@ -47,8 +84,8 @@ const printers: Record<string, Printer> = {
     [AST_FORMAT]: createPrinter() as Printer,
 };
 
-const plugin: Plugin = { languages, parsers, printers };
+const plugin: Plugin = { languages, options, parsers, printers };
 
-export { languages, parsers, printers };
+export { languages, options, parsers, printers };
 
 export default plugin;
