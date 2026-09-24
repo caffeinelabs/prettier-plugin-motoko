@@ -1,6 +1,3 @@
-// Walks the adjacency `CHECKLIST` with `preserve` cases per item, and fails if an item has no case or a case has no item.
-// Items 1 and 2 are rewrites `preserve` does not perform, so their cases pin that the source's own spacing is reproduced.
-
 import { describe, expect, test } from 'vitest';
 import prettier from 'prettier';
 
@@ -30,7 +27,6 @@ function format(
     return prettier.format(source, { ...OPTIONS, ...overrides });
 }
 
-/** `width` is explicit because force-glue and never-split rules only bite when the construct would otherwise break. */
 interface Case {
     readonly source: string;
     readonly printed: string;
@@ -217,7 +213,6 @@ const CASES = new Map<number, readonly Case[]>([
                 why: 'a wrapping operator is one token',
             },
             {
-                // Long operands force the block to break; with short ones an operator-splitting printer would pass too.
                 source: 'func f() { let x = aaaaaaaa >> bbbbbbbb }',
                 printed: 'func f() {\n  let x = aaaaaaaa >> bbbbbbbb\n}\n',
                 width: 12,
@@ -258,7 +253,6 @@ const CASES = new Map<number, readonly Case[]>([
                 why: '`S5`: same for the tight `#` variant seam',
             },
             {
-                // `mayTrail` rejects `#`, so `planChain` refuses the chain and the source-gap fallback keeps it.
                 source: 'func f() { let x = aaaaaaaabbbbbbbb#ccccccccdddddddd }',
                 printed:
                     'func f() {\n  let x = aaaaaaaabbbbbbbb#ccccccccdddddddd\n}\n',
@@ -269,7 +263,6 @@ const CASES = new Map<number, readonly Case[]>([
     ],
 ]);
 
-/** Spelled out so a gap or a duplicate in `CHECKLIST` fails. */
 const DOCUMENTED_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 describe('the adjacency checklist', () => {
@@ -304,7 +297,6 @@ describe('the checklist is complete and has no orphan cases', () => {
     });
 
     test('every item has at least one case, and every case has an item', () => {
-        // Both directions: a dropped item fails, and so does a stale case for an item that no longer exists.
         for (const item of CHECKLIST) {
             expect(
                 CASES.get(item.n)?.length ?? 0,
@@ -344,14 +336,12 @@ describe('item 7: the indivisible operators are a value, not a chain of ifs', ()
 describe('item 8: a comment in a glued seam is a conflict', () => {
     test('only a non-blank comment in a glued seam conflicts', () => {
         expect(commentSplitsSeam('/*c*/', true)).toBe(true);
-        // A comment in a free-spaced seam is ordinary layout.
         expect(commentSplitsSeam('/*c*/', false)).toBe(false);
         expect(commentSplitsSeam('   ', true)).toBe(false);
     });
 });
 
 describe('item 9: the guard cannot decide these seams, so the printer must', () => {
-    // If `compareShapes` sees no difference, the runtime guard would accept a spelling that means something else.
     const blind = async (a: string, b: string): Promise<boolean> =>
         compareShapes(
             shapeOf((await parse(a)).root),
@@ -373,7 +363,6 @@ describe('item 9: the guard cannot decide these seams, so the printer must', () 
     });
 
     test('but a structural change is not — which is why items 1 and 2 differ', async () => {
-        // Parenthesising a head adds a real node, so the guard can police item 1 but not item 2's branch spacing.
         expect(
             await blind(
                 'func g(x : Nat) : Nat { 1 };\nfunc f(x : Nat) : Nat { if g(x) { 1 } else { 2 } }',
@@ -385,7 +374,6 @@ describe('item 9: the guard cannot decide these seams, so the printer must', () 
 
 describe('the module is a library of seams, and the ones it exports agree with the output', () => {
     test('`glue` is zero-width: it concatenates and adds nothing', () => {
-        // Every force-glued seam depends on this.
         expect(glue()).toBe('');
         expect(glue('a')).toBe('a');
         expect(glue('a', 'b')).toEqual(['a', 'b']);

@@ -1,9 +1,3 @@
-// Object, module, actor and class bodies, and the anonymous `object { ... }` / `actor { ... }`
-// expressions. `obj_body` recurses, so each nesting level is deliberate.
-//
-// A plain `actor { ... }` declaration is `obj_dec` + `obj_body`, NOT `actor_exp`; `actor_exp` is
-// only reachable when the operand is a non-body expression (`actor (x)`, `actor "aaaa-aa"`).
-// `system_exp` is only reachable as a `system func` inside a body. Neither is a `{}` list.
 let anon = object { public let x = 1; public func f() : Nat { 1 } };
 let anonEmpty = object {};
 let actorExp = actor {

@@ -1,64 +1,31 @@
-/**
- * Motoko's whitespace-sensitive token pairs: the seams where another spacing of the same tokens parses differently or not at all.
- *
- * Output must mean the same under moc 1.x and moc 2.0.
- * tree-sitter-motoko, the formatter's own parser, disagrees with moc in both directions, so no decision here is delegated to it.
- * Every other token pair is free-spaced and left to the area printers.
- * It depends on nothing but prettier's doc builders, so any printer can import it without an import cycle.
- */
-
 import { doc } from 'prettier';
 import type { Doc } from 'prettier';
 
 const { hardline, line } = doc.builders;
 
-/** How a token pair may be spaced. */
 export type Verb =
-    /** A space is mandatory and must not become a newline. */
     | 'force-spaced'
     | 'force-glued'
-    /** The asymmetric pairs: a space on one side, none on the other. */
     | 'force-spaced-before'
     | 'force-spaced-after'
-    /** Not a seam. */
     | 'free';
 
-/** Joins docs with nothing between them. Prettier keeps a `line` between siblings as a legal break, so a glued pair must be one concat. */
 export function glue(...parts: Doc[]): Doc {
     return parts.length === 0 ? '' : parts.length === 1 ? parts[0] : parts;
 }
 
-/**
- * `5.` lexes as a Float, so `5.toText()` has no `.` token and `5. toText()` is a different program (`Float 5.` applied to `toText`).
- * tree-sitter can't see this, so a number the source glued to its dot stays glued.
- */
+// `5.` lexes as a Float, so `5. toText()` is a different program from `5.toText()`.
 export const NUMBER_DOT_GLUED = true;
 
-/**
- * Keywords whose head is a spelling decision, not a layout one.
- *
- * moc 1.1.0 rejects both the tight `if f(x) { }` and the spaced bare form, so a compound head is always parenthesised.
- * A bare name, a `<`-free atom, or an already-parenthesised head parses on every moc and stays bare, so `if c { }` doesn't churn.
- */
+// moc 1.1.0 rejects both the glued and the spaced bare compound head, so only the parenthesised one is safe.
 export type HeadKeyword = 'if' | 'while' | 'switch' | 'for';
 
-export type HeadShape =
-    /** A bare name or other `<`-free atom: `if c`, `if o.x`, `if 1`. */
-    | 'atom'
-    /** Already a `par_exp`, so wrapping again would nest `((c))`. */
-    | 'par'
-    /** A call, index, instantiation, operator chain, or any node not known to be safe bare. */
-    | 'compound';
+export type HeadShape = 'atom' | 'par' | 'compound';
 
-/** A whitelist of what may stay bare: the only spelling safe for an unknown compound node is the parenthesised one. */
 export function headNeedsParens(shape: HeadShape): boolean {
     return shape === 'compound';
 }
 
-/**
- * Operators the lexer reads as one token, so whitespace inside one splits it into tokens the grammar can't reassemble.
- * Data rather than a chain of `if`s because the adjacency test iterates it. `->` is here for its inner seam; the space around it is free.
- */
 export const INDIVISIBLE_OPERATORS: ReadonlySet<string> = new Set([
     ':=',
     '+=',
@@ -83,11 +50,9 @@ export const INDIVISIBLE_OPERATORS: ReadonlySet<string> = new Set([
     '-%',
     '*%',
     '->',
-    // The suffix is part of the token.
     'await*',
     'async*',
     'await?',
-    // `a > > b` does not re-lex as a shift, so both `>` must come from one token.
     '<<',
     '>>',
     '<<>',
@@ -98,93 +63,57 @@ export function isIndivisible(tokenText: string): boolean {
     return INDIVISIBLE_OPERATORS.has(tokenText);
 }
 
-// `<` is instantiation glued and comparison spaced. Two functions rather than one flag, because only the caller knows the role.
-
-/**
- * Glued, because tree-sitter's instantiating `<` is `token.immediate`, so `f <T>(x)` re-parses as a comparison (moc accepts either).
- * A broken angle list must still glue its close, which `ListDescriptor.closeGlued` in `parts.ts` enforces.
- */
+// tree-sitter's instantiating `<` is `token.immediate`, so `f <T>(x)` re-parses as a comparison.
 export function instantiationAngles(inner: Doc): Doc {
     return glue(inner);
 }
 
-/** The `>>` closing nested type args, one glued unit: `> >` does not re-lex as two closing angles. */
 export function nestedClose(parts: Doc[]): Doc {
     return glue(...parts);
 }
 
-/** Spaced on both sides: moc lexes `<`/`>` as comparison only with whitespace around them, so `x<y;` is a syntax error. */
+// moc lexes `<`/`>` as comparison only when spaced on both sides, so `x<y;` is a syntax error.
 export function comparisonOp(op: string): Doc {
     return [line, op, line];
 }
 
-/**
- * `??` keeps a literal trailing space and breaks before, never after: unspaced `??x` is `?(?x)`.
- *
- * tree-sitter's token is `/\?\?[ \t\r\n]/`, so `a ??b` is rejected,
- * and `a ??\nb` re-parses to a token spelled `"??\n"`, which the re-parse guard rejects.
- * The space before is free, but a glued `a??` reads as two `?` tokens on moc 1.x.
- */
+// tree-sitter's `??` token is `/\?\?[ \t\r\n]/`, so it needs its trailing space, and glued `??x` is `?(?x)`.
 export function coalesceOperator(op: string): Doc {
     return [line, op, ' '];
 }
 
-/** `? ?a`, spaced and unbreakable: moc 1.1.0 reads glued `??a` as `?(?a)` while 1.16.1 and 2.0 reject it. */
+// moc 1.1.0 reads glued `??a` as `?(?a)`, while 1.16.1 and 2.0 reject it.
 export function doubleOption(): Doc {
     return '? ?';
 }
 
-/**
- * `#` glues to its tag and is spaced from whatever precedes it.
- *
- * moc 2.0's `TIGHT_HASH` lexer rule makes `#less` a tag only when glued, and `if (c)#less` is a syntax error on 1.16.1 and 2.0.
- * tree-sitter can't see this seam, so moc is the authority.
- */
+// moc 2.0's `TIGHT_HASH` rule makes `#less` a tag only when glued.
 export function hashTag(tag: Doc): Doc {
     return ['#', tag];
 }
 
-/** A space before `#`, never a break: the seam is spacing-sensitive on moc and tree-sitter can't check it. */
 export function spaceBeforeHash(): Doc {
     return ' ';
 }
 
-/**
- * The space between a control head and a bare branch, never a break.
- *
- * Glued `(`/`[` after a control head continues the head as a call or index on moc 1.1.0, while spaced starts the branch.
- * A `-` branch is spaced before and glued after: only `if (c) -1` parses on every moc, since `- 1` is a subtraction on 1.1.0.
- */
+// A glued `(`/`[` after a control head continues the head as a call or index on moc 1.1.0.
 export function bareBranchSpace(): Doc {
     return ' ';
 }
 
-/**
- * A unary `-`/`+`/`^` glued to its operand. The seam before the operator is `bareBranchSpace`'s.
- *
- * Never brace a unary-minus branch: `if (c) -h { 1 } else { 5 }` reads `-` as subtraction and `{ 1 }` as a record on every moc.
- * The bare branch `if (c) -h else 5` is the universally accepted form.
- */
+// `if (c) - 1` is a subtraction on moc 1.1.0, so the sign stays glued.
 export function unaryOperand(op: Doc, operand: Doc): Doc {
     return glue(op, operand);
 }
 
-/** Juxtaposition `f x` needs its space, never a break. In `f { a = 1 }` the space keeps the `{` a record argument, not a block. */
 export function juxtapositionSpace(): Doc {
     return ' ';
 }
 
-/** Binary chains break after the operator. `|>` and `??` break before it instead, see `coalesceOperator`. */
 export function breakAfterOperator(op: Doc): Doc {
     return [op, line];
 }
 
-/**
- * Whether a comment would sit inside a glued seam, which is a hard conflict.
- *
- * A comment between a callee and its `(`, or before an index bracket, stops them being a call or index. One after `??` breaks the token.
- * The formatter may not silently move the author's comment, so this returns a boolean and each caller picks its own hoist or fails.
- */
 export function commentSplitsSeam(
     commentText: string,
     glued: boolean,
@@ -192,10 +121,8 @@ export function commentSplitsSeam(
     return glued && commentText.trim() !== '';
 }
 
-/** The adjacency checklist as data. The adjacency test asserts one case per item, so an item can't be dropped silently. */
 export interface ChecklistItem {
     readonly n: number;
-    /** Row ids, e.g. `H1`, `B3`, `L5`. */
     readonly rows: readonly string[];
     readonly rule: string;
 }
@@ -240,7 +167,6 @@ export const CHECKLIST: readonly ChecklistItem[] = [
     },
 ];
 
-/** At most one blank line, and the printer never invents one. Spelled once so the rule is greppable. */
 export function blankLine(): Doc {
     return [hardline, hardline];
 }

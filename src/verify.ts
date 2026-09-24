@@ -1,11 +1,3 @@
-/**
- * Runtime guard: every format call re-parses its own output and compares trees, throwing on a difference.
- *
- * A printer bug is caught by a parse rather than by review, so it cannot ship a silent meaning change even if fixtures miss the case.
- * The comparison is structural because reformatting moves every offset and gap, so a textual one would fail on correct output.
- * The tolerance list is applied in `compareShapes` rather than inside `shapeOf`, so a rewrite that adds an unforgiven node still fails.
- */
-
 import { parse } from './parser/parse.ts';
 import { shapeOf } from './parser/normalize.ts';
 import type {
@@ -14,9 +6,7 @@ import type {
     NormalNode,
 } from './parser/normalize.ts';
 
-/** A plain `Error`, not a `SyntaxError`: the input was well-formed, the printer is what went wrong. Prettier writes nothing. */
 export class VerifyError extends Error {
-    /** 1-based line, 0-based column, the shape Prettier's own errors use. */
     readonly loc: { line: number; column: number };
 
     constructor(message: string, loc: { line: number; column: number }) {
@@ -26,13 +16,10 @@ export class VerifyError extends Error {
     }
 }
 
-/** A node kind the printer is allowed to have introduced or removed. */
 interface Tolerance {
     readonly reason: string;
 }
 
-// Empty, so output must be exactly structure-preserving. A rewrite gets one entry per kind it edits, never a default,
-// so the guard still sees printer bugs like dropped parens.
 const TOLERATED_KINDS: ReadonlyMap<string, Tolerance> = new Map();
 
 function tolerated(shape: unknown): boolean {
@@ -40,13 +27,9 @@ function tolerated(shape: unknown): boolean {
     return TOLERATED_KINDS.has(shape[0]);
 }
 
-/** One difference between the input tree and the output tree, with enough context to locate it. */
 export interface ShapeDifference {
-    /** Dotted path of child indices from the root. */
     path: string;
-    /** The input tree's shape at `path`, or its child count when the two child lists differ in length. */
     input: unknown;
-    /** The output tree's shape at `path`, or its child count. */
     output: unknown;
 }
 
@@ -55,29 +38,17 @@ function show(shape: unknown): string {
     return JSON.stringify(shape, null, 0).slice(0, 200);
 }
 
-// A token shape is `~?type:text`. Matched on the prefix because the comparator only sees the `unknown` projection, not the node.
 function isLineCommentShape(shape: string): boolean {
     return /^~?(line_comment|doc_comment):/.test(shape);
 }
 
-/**
- * Token equality, forgiving trailing whitespace on a line comment.
- *
- * A line comment always ends at a line end, and `printDocToString` trims trailing whitespace there, so `/// doc ` comes back as `/// doc`.
- * A block comment stays strict: mid-line nothing trims it, so a dropped space there is a real bug.
- */
+// `printDocToString` trims trailing whitespace at a line end, so a line comment can lose its trailing spaces.
 function sameToken(input: string, output: string): boolean {
     if (input === output) return true;
     if (!isLineCommentShape(input) || !isLineCommentShape(output)) return false;
     return input.replace(/\s+$/, '') === output.replace(/\s+$/, '');
 }
 
-/**
- * Compare two `shapeOf` trees, returning the first difference in source order or `null` when they agree.
- *
- * Typed as `unknown` because a typed view would have to be re-derived from `NODE_KINDS` and would drift.
- * The checks are exhaustive over the shapes: `null` for a gap, a `string` for a token, an array for a branch.
- */
 export function compareShapes(
     input: unknown,
     output: unknown,
@@ -92,7 +63,6 @@ export function compareShapes(
     }
 
     if (Array.isArray(input) && Array.isArray(output)) {
-        // A branch shape is `[kind, mode?, children]`: the head is compared here, the children walked below.
         const head = Math.min(input.length, output.length) - 1;
         for (let i = 0; i < head; i += 1) {
             if (input[i] !== output[i]) {
@@ -110,11 +80,9 @@ export function compareShapes(
             return { path, input, output };
         }
 
-        // A tolerated kind is compared by kind only, since walking its children would re-report the edit the tolerance allows.
         if (tolerated(input) && tolerated(output) && input[0] === output[0])
             return null;
 
-        // Reported as a count so the message is about the list, not an `undefined` child past its end.
         if (inputKids.length !== outputKids.length) {
             return {
                 path,
@@ -137,11 +105,6 @@ export function compareShapes(
     return { path, input, output };
 }
 
-/**
- * Re-parse `printed` and throw `VerifyError` on the first difference from `expected`.
- *
- * `expected` is the input tree, not one the printer produced, or the check would be vacuous.
- */
 export async function verifyOutput(
     expected: NormalNode,
     printed: string,
@@ -183,18 +146,12 @@ export async function verifyOutput(
     }
 }
 
-/**
- * Turn a `compareShapes` path into a source location.
- *
- * `shapeOf` drops gap nodes, so path indices skip `Text` children; the walk replays the same drop.
- * An unfollowable path stops at the deepest node reached, and the path string is in the message anyway.
- */
 function locate(
     root: NormalNode,
     path: string,
 ): { line: number; column: number } {
     let node: NormalChild = root;
-    const steps = path.split('.').slice(1); // the leading element is the empty root segment
+    const steps = path.split('.').slice(1);
 
     for (const step of steps) {
         // A typed local, since TypeScript cannot narrow `node` while the loop reassigns it.

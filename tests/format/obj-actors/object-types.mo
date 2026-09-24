@@ -1,9 +1,3 @@
-// Object types (`obj_typ`), which the decision table puts in the plain `semi_sep` row, and
-// `variant_typ`, which shares the braces and the `;` but is the `semi_sep1` row. Both are the
-// same list contract in code: `docs/style.md` says the two rows "print identically", so the
-// family is recorded for fidelity and nothing branches on it.
-//
-// `wide` is one line in the source and must break; the rest fit and stay flat.
 type Simple = { x : Nat; y : Text };
 type Method = { f : () -> async Nat };
 type Mutable = { var x : Nat };

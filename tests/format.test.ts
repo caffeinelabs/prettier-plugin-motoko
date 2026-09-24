@@ -1,6 +1,3 @@
-// Snapshots each `tests/format/<area>/*.mo` fixture's formatted output and asserts it is a fixed point.
-// Fixtures are deliberately non-canonical, so the fixed point is checked on the output, which catches a printer that oscillates.
-
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -11,7 +8,6 @@ import plugin from '../src/index.ts';
 
 const FIXTURE_ROOT = join(import.meta.dirname, 'format');
 
-// Spelled out so no fixture depends on Prettier's defaults.
 const OPTIONS: prettier.Options = {
     parser: 'motoko',
     plugins: [plugin],
@@ -20,7 +16,6 @@ const OPTIONS: prettier.Options = {
     trailingComma: 'none',
 };
 
-// Options keyed by area directory, since a fixture is a plain `.mo` file with nowhere to carry its own.
 const AREA_OPTIONS: Record<string, Record<string, unknown>> = {
     'organize-imports': { motokoOrganizeImports: true },
 };
@@ -51,7 +46,6 @@ function fixtures(dir: string = FIXTURE_ROOT, out: string[] = []): string[] {
 
 const FILES = fixtures();
 
-// A harness with no fixtures is indistinguishable from one that stopped working.
 test('there are fixtures to check', () => {
     expect(FILES.length).toBeGreaterThan(0);
 });
@@ -68,7 +62,6 @@ describe.each(
         const source = readFileSync(path, 'utf8');
         const once = await format(source, path);
         const twice = await format(once, path);
-        // A bare `toBe` prints two whole files; the first differing line is what the reader needs.
         expect(twice, firstDifferingLine(once, twice)).toBe(once);
     });
 });

@@ -1,12 +1,3 @@
-// The `... with ...` record-literal form, which `parts.ts:listOf` resolves to `semi_sep1` by
-// instance (the node carries a `with` token). The `and`-only form has no `with` and stays
-// `semi_sep`. Both print identically under `preserve`, because the trailing separator is
-// reproduced from the source rather than chosen by the family — the family is fidelity to the
-// decision table, not a behaviour switch.
-//
-// The prelude words (`and`, `with`) are ordinary list items: `parts.ts:isItem` only excludes
-// separators and delimiters, so they are printed in source order between the base expressions
-// and the fields.
 module M {
     public let u = 25;
 };

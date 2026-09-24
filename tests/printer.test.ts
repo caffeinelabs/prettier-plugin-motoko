@@ -1,6 +1,3 @@
-// Pins the `preserve` printer's output case by case, and makes the runtime guard fire on differences it must reject.
-// Options are spelled out so no case depends on Prettier's defaults; `trailingComma` and `semi` are asserted inert.
-
 import { describe, expect, test } from 'vitest';
 import prettier from 'prettier';
 
@@ -25,14 +22,12 @@ function format(
     return prettier.format(source, { ...OPTIONS, ...overrides });
 }
 
-/** `why` is the test name, so a failure reads as the rule that broke. */
 interface Case {
     readonly source: string;
     readonly printed: string;
     readonly why: string;
 }
 
-// A list that fits goes on one line.
 const LAYOUT: Case[] = [
     {
         source: 'let t = (1,2)',
@@ -111,7 +106,6 @@ const LAYOUT: Case[] = [
     },
 ];
 
-// A list that does not fit breaks one item per line, and the trailing separator follows the source, not the layout.
 const BREAKING: Case[] = [
     {
         source: 'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 }',
@@ -145,7 +139,6 @@ const BREAKING: Case[] = [
     },
 ];
 
-// A comment forces its group open, because a `//` that flattens swallows what follows.
 const COMMENTS: Case[] = [
     {
         source: 'let x = 1; // hi\nlet y = 2',
@@ -169,7 +162,6 @@ const COMMENTS: Case[] = [
     },
 ];
 
-// The source's blank lines are kept and capped at one, and none is invented.
 const BLANK_LINES: Case[] = [
     {
         source: 'let a = 1;\n\n\n\nlet b = 2;',
@@ -193,7 +185,6 @@ const BLANK_LINES: Case[] = [
     },
 ];
 
-// The one place the printer invents a blank line: after the import section, including comments that trail it.
 const IMPORT_SECTION: Case[] = [
     {
         source: 'import A "A";\n\nactor {};\n',
@@ -260,7 +251,6 @@ const IMPORT_SECTION: Case[] = [
     },
 ];
 
-// Constructs the printer must not touch.
 const UNTOUCHED: Case[] = [
     {
         source: 'let r = 1.toText()',
@@ -307,7 +297,6 @@ describe('preserve: layout', () => {
         expect(await format(c.source)).toBe(c.printed);
     });
 
-    // `format` re-parses its output and throws if the tree changed, so a wrong expectation cannot pass silently.
     test('every layout case is accepted by the guard', async () => {
         for (const c of LAYOUT) {
             await expect(
@@ -326,7 +315,6 @@ describe('preserve: breaking', () => {
         },
     );
 
-    // Both exceed the width, so a layout-keyed trailing separator would print them identically.
     test('a trailing separator follows the source, not the layout', async () => {
         const without = await format(
             'let r = { alpha = 1; beta = 2; gamma = 3; delta = 4; epsilon = 5; zeta = 6; eta = 7 }',
@@ -348,7 +336,6 @@ describe('preserve: comments', () => {
         },
     );
 
-    // Asserts lines rather than exact text, so it survives layout changes but still fails if the comment swallows the next item.
     test('a line comment never absorbs the item after it', async () => {
         const printed = await format(
             'let r = {\n  aaaaaaaaaaaaaaaaaaaa = 1; // a long enough comment to matter\n  b = 2\n}',
@@ -407,7 +394,6 @@ describe('preserve: idempotence and options', () => {
         },
     );
 
-    // A Prettier core option the plugin does not declare: it must resolve, and `preserve` takes separators from the source.
     test('trailingComma is inert under preserve', async () => {
         for (const c of ALL) {
             expect(
@@ -417,7 +403,6 @@ describe('preserve: idempotence and options', () => {
         }
     });
 
-    // `semi` asks to add or remove a token, which `preserve` may not do.
     test('semi is inert under preserve', async () => {
         for (const c of ALL) {
             expect(
@@ -427,7 +412,6 @@ describe('preserve: idempotence and options', () => {
         }
     });
 
-    // Without this, a printer that ignored `printWidth` would pass every case above.
     test('printWidth decides whether a list breaks', async () => {
         const source = 'let r = { aaaa = 1; bbbb = 2 }';
         expect(await format(source, { printWidth: 80 })).toBe(
@@ -439,14 +423,8 @@ describe('preserve: idempotence and options', () => {
     });
 });
 
-/**
- * A broken angle list must glue its `>` to the last item, and only output assertions can check it.
- *
- * moc lexes a `>` with whitespace on both sides as the greater-than operator, so a close pushed onto its own line is a syntax error.
- * `shapeOf` drops whitespace gaps, so the runtime guard cannot see the difference, and idempotence holds on the broken output.
- */
+// moc lexes a spaced `>` as greater-than, and `shapeOf` drops gaps, so only output assertions catch a detached close.
 describe('preserve: the angle close', () => {
-    /** Every `typ_params`/`inst` node whose closing `>` is detached from the last item. */
     function detachedCloses(root: NormalChild): string[] {
         const bad: string[] = [];
         const visit = (node: NormalChild): void => {
@@ -469,7 +447,6 @@ describe('preserve: the angle close', () => {
         expect(printed).toBe('type F<\n  Alpha,\n  Beta,\n  Gamma> = Alpha;\n');
     });
 
-    // `inst` carries the close too, so a fix on `typ_params` alone would leave this broken.
     test('an instantiation list glues its close too', async () => {
         const printed = await format(
             'type L = List<List<Nat>>;\nlet x = L.make<Alpha, Beta>();',
@@ -479,7 +456,6 @@ describe('preserve: the angle close', () => {
         expect(printed).not.toMatch(/\n\s*>/);
     });
 
-    // A bound is the only way an inner `>` ends a multi-item angle list; a one-item list never breaks.
     test('a nested close is a contiguous `>>`', async () => {
         const printed = await format(
             'func f<Alpha, Beta <: List<Nat>>(a : Alpha) : Beta = a;',
@@ -490,8 +466,6 @@ describe('preserve: the angle close', () => {
         );
     });
 
-    // Checked against the CST so a `>` comparison operator cannot satisfy it.
-    // A type application like `Map<Text, Nat>` is a verbatim `path_typ`, so `reached` keeps a source that hits no angle list from passing.
     test('no printed angle list anywhere ends a line before its `>`', async () => {
         const sources = [
             'type F<Alpha, Beta, Gamma> = Alpha;',
@@ -523,7 +497,6 @@ describe('preserve: the angle close', () => {
         }
     });
 
-    // The premise of this group; if `shapeOf` starts distinguishing these, the guard covers it and this should fail.
     test('the runtime guard cannot see the difference — the reason these are output assertions', async () => {
         const glued = shapeOf((await parse('type F<A, B> = A;\n')).root);
         const broken = shapeOf(
@@ -533,7 +506,6 @@ describe('preserve: the angle close', () => {
     });
 });
 
-// Makes the guard fire on purpose, so zero guard failures means nothing differed rather than nothing was compared.
 describe('the runtime guard', () => {
     async function shape(source: string) {
         const { root } = await parse(source);
@@ -550,33 +522,28 @@ describe('the runtime guard', () => {
         const output = await shape('let a = 1;\nlet b = 3;\n');
         const difference = compareShapes(input, output);
         expect(difference).not.toBeNull();
-        // Asserts the path's form rather than a literal index, so a change to the root layout does not break it.
         expect(difference!.path).toMatch(/^(\$|\.?\d)/);
         expect(difference!.path.length).toBeGreaterThan(0);
     });
 
-    // Dropping the parens still parses, but as a different tree.
     test('it rejects an unwrapped parenthesised argument', async () => {
         const input = await shape('let f = func (x : Nat) { }; f (1);\n');
         const output = await shape('let f = func (x : Nat) { }; f 1;\n');
         expect(compareShapes(input, output)).not.toBeNull();
     });
 
-    // Bracing a `func … = e` body adds a block node; both sides parse, so only a structural comparison sees it.
     test('it rejects an added block', async () => {
         const input = await shape('func f() : Nat = 1;\n');
         const output = await shape('func f() : Nat { 1 };\n');
         expect(compareShapes(input, output)).not.toBeNull();
     });
 
-    // If a separator stopped being a token, the printer could normalise `;` unnoticed.
     test('a trailing separator is a structural difference', async () => {
         const without = await shape('let r = { a = 1 }\n');
         const with_ = await shape('let r = { a = 1; }\n');
         expect(compareShapes(without, with_)).not.toBeNull();
     });
 
-    // Prettier's line writer strips trailing whitespace, so a line comment's trailing spaces cannot survive a round trip.
     test('it forgives a line comment’s trimmed trailing space', async () => {
         const withSpace = await shape('/// doc \nlet x = 1\n');
         const trimmed = await shape('/// doc\nlet x = 1\n');
