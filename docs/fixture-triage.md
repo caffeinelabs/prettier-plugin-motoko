@@ -148,6 +148,43 @@ location" — which is a _better_ contract and a deliberate change. One of them
 (`import with missing semicolon at end`) needs care: the grammar requires `;` between items, so this
 is a parse error, not an organize-imports concern.
 
+## The refusals, measured
+
+Replaying the suite through the current plugin (`.probe/_legacyreplay.mts`) splits the 267 extracted
+assertions into **140 PASS, 87 DIFF, 34 THROWS, 6 COMPUTED** (the last are built by JS
+interpolation — `${'x'.repeat(80)}` — so the regex reader recovers the template's characters, not the
+string; they must be re-derived by hand as fixtures).
+
+The 34 refusals are the pile that matters, because a refusal is either a real gap or an input that
+was never Motoko. Each input was written to a file **exactly as the legacy test spelled it** and
+handed to `moc 1.16.1` and `moc 2.0.0-beta.1` (`-dp`; a dumped `(Prog` tree is the positive signal,
+and a bare expression is a valid program — `1 + 1` and `abc` both parse).
+
+**All 34 are rejected by both compilers. Zero are valid Motoko.** Our own parser refuses all 34 too,
+so the parser and moc agree on every one; there is no parser gap hiding in this pile.
+
+Two consequences:
+
+- **They are `delete`, not `change`.** The old engine accepted them because it shaped lines rather
+  than parsing — `replace delimiters` asserts `format('(a;b;c)') === '(a, b, c)\n'`, i.e. it read a
+  semicolon-separated tuple and repaired it to a comma-separated one. That is the old algorithm, and
+  there is no new expectation to port: the input is a syntax error under the new engine, which is
+  the correct contract.
+- **Several entries above are marked `keep` as _constructs_, and that verdict stands** — but the
+  legacy _spellings_ for some of them are not valid programs on their own, so a fixture must be
+  written at the construct's real spelling. `async*` is `func f() : async* T { ... }` and `await*` is
+  `await* t`, never the bare `async * T` the legacy test passed; `(a, b, c)` and `{a; b; c}` are
+  valid where `(a;b;c)` and `{a,b,c}` are not; `#a` and `"A" # b` are valid where `# "A"`, `# 5` and
+  `.1e1` are not; `x : [{ abc : Nat }] = 1;` is valid where `x : [{ abc; }] = 1;` is not. The `keep`
+  verdicts describe the construct; the fixture header must carry the spelling that actually parses.
+
+One entry needs a doc-level correction rather than a fixture. §5 of
+[grammar-deviations.md](grammar-deviations.md) records that `@`-identifiers are unreachable and the
+formatter rule is "a `.mo` file containing `@` must be a hard, reported failure" — correct, and
+because moc also rejects a bare `@abc` in a file, this pile adds nothing to it. It does mean the
+`@ symbol` fixture is not the "keep, and document that the case currently cannot parse" the section
+above implies: it is a `delete`, and §5's rule already carries the intent.
+
 ## Counting the port
 
 Against the 102 tests:
@@ -157,10 +194,37 @@ Against the 102 tests:
 - **delete**: ~11 (the malformed-import crash-tolerance group, and any test whose only content is
   the old semicolon line-shape table)
 
-These numbers are an estimate to be corrected as fixtures are written; they are stated so a reviewer
-can check the shape of the port rather than trusting a bare "ported" claim. The exact per-test
-verdict is recorded in each fixture's header comment when M2 writes them, and this file is updated
-to match.
+Those numbers were written before the printer existed, so they could not distinguish "this case
+asserts a rule that survives" from "this case asserts a rule the `preserve` printer _cannot_
+implement". The replay (§"The refusals, measured") supplies that distinction, and it moves the count:
+of the 267 extracted assertions, **140 already print to their legacy expectation**, so the fixture is
+a near-copy of a case that passes today rather than a case to re-derive.
+
+The other 87 DIFFs are not 87 bugs. [style.md](style.md) rules on the largest group directly — its
+§"Interaction with the ported fixture expectations" states that the legacy expectations are the
+**`moc2`** behaviour and "are the specification for M3 rather than a gate on this printer", and its
+§"Read this table as the `moc2` target" gives the reason: the guard compares the printed token stream
+against the input tree, and **a separator is a token**, so `preserve` cannot implement any
+`ifBreak`/`semi`/`trailingComma` cell. A DIFF whose content is a separator the legacy expectation adds
+or removes is therefore **`change` by construction, with the copy being the source's own** — not a
+defect to fix.
+
+That is the test a reviewer should apply to each remaining DIFF in turn:
+
+- the difference is a **separator** the printer added or removed → **change**, spec'd by style.md;
+- the difference is **whitespace or layout** inside the printer's remit → check
+  [adjacency.md](adjacency.md) first, because there the adjacency table wins over the old expectation;
+- the difference is a **layout choice** (`ifBreak`, break direction, blank lines) → the relevant
+  style.md section is authoritative and the legacy expectation is the `moc2` target.
+
+A **fixture is an input, and its snapshot records the printer's output**
+(`tests/format.test.ts`). So a case whose output is _wrong_ must not be ported at all: snapshotting it
+would enshrine the bug. The port criterion is therefore not "this case passes" but "this case's
+**output** is what the spec asks for" — the two coincide for the 140 PASSes and have to be checked one
+by one for the rest.
+
+These numbers remain an estimate to be corrected as fixtures are written; the exact per-test verdict
+is recorded in each fixture's header comment, and this file is updated to match.
 
 ## What is deliberately NOT ported
 
