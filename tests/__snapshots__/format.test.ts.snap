@@ -47,9 +47,16 @@ exports[`format/comments/separator-seams.mo > prints as snapshotted 1`] = `
  *
  * \`,\` and \`;\` on a line of their own are ordinary Motoko, and the corpus writes them —
  * \`../motoko/test/repl/lib/type-lub.mo\` leads seven lines with \`,\`. moc accepts both spellings, and
- * the outputs below are checked against it rather than assumed (\`.probe/_cfitems.mts\` records the
- * three target forms parsing with 0 syntax errors, measured with \`/tmp/moctar/moc -dp\` and grepped
- * for \`syntax error\`, because moc's exit code is unreliable and reports 0 for both).
+ * the outputs below are checked against it rather than assumed: each is printed, written to a file,
+ * and fed to \`/tmp/moctar/moc -dp\` (\`.probe/_moccheck.mts\`), whose report is grepped for
+ * \`syntax error\` — **not** read from its exit code. The distinction is load-bearing here and was got
+ * wrong once: these cases are fragments, so moc fails name resolution on them and exits 1 whether or
+ * not the separator is spelled right. ON THE INPUT the fix replaced — the comma inside the comment,
+ * \`f(\\n  a // c,\\n  b\\n)\` — moc reports **zero syntax errors too**, and exits 1 for the same
+ * name-resolution reason. That is exactly why this bug needed no compiler to find and is a guard
+ * catch rather than a moc catch: the mis-spelling parses, it just means a different tree, so
+ * \`verify.ts\`'s re-parse comparison is the only thing that can see it. The grep is what separates
+ * "accepted" from "accepted as something else".
  *
  * ## The cases are the three sites the rule reaches
  *
