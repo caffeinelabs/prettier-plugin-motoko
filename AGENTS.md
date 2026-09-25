@@ -22,9 +22,9 @@ CI pins both revisions in `.github/workflows/tests.yml` and sets `MOTOKO_CORPUS_
 
 - `src/parser/` — tree-sitter initialisation, the normalised tree, and syntax errors.
 - `src/parser/nodes.generated.ts` — generated from the grammar by `npm run gen:node-types`; never hand-edit it. CI checks it is current.
-- `tools/` — the node-type generator and the build's wasm copy step.
+- `tools/` — the node-type generator, the build's wasm copy step and the mo-fmt bundler.
 - `tests/` — Vitest suites; `tests/fixtures/` holds parser fixtures for rare constructs.
-- `packages/mo-fmt/` — the standalone CLI, still on the 0.13 plugin from npm until it is rebuilt. Build and test it from inside that directory.
+- `packages/mo-fmt/` — the standalone CLI. It imports the plugin from `src/`, and `npm run build:mo-fmt` bundles both, with Prettier, into `packages/mo-fmt/dist/mo-fmt.cjs`. Its tests are `tests/mo-fmt.test.ts`.
 
 ## Conventions and gotchas
 
@@ -32,4 +32,3 @@ CI pins both revisions in `.github/workflows/tests.yml` and sets `MOTOKO_CORPUS_
 - `tree-sitter-motoko` and `web-tree-sitter` are pinned exactly: a grammar minor bump changes tree shapes, and the runtime must load the grammar's ABI. After bumping the grammar, run `npm run gen:node-types`.
 - The grammar is a devDependency only. Its install script builds native bindings, so the build copies its wasm into `lib/` instead of depending on it at runtime.
 - `.npmrc` sets `min-release-age=7`, so newly published dependency versions are held back for 7 days.
-- Releases are triggered only by changes to `packages/mo-fmt/package.json` on `main` (`.github/workflows/release.yml`), which tags from that file's `version`.

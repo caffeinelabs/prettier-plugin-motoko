@@ -26,11 +26,11 @@ Check if your Motoko files are correctly formatted:
 npx prettier --check --plugin=prettier-plugin-motoko **/*.mo
 ```
 
-Alternatively, check out [`mo-fmt`](https://www.npmjs.com/package/mo-fmt) for a standalone Motoko formatter CLI:
+Alternatively, use [`mo-fmt`](packages/mo-fmt), the standalone formatter built from this repository:
 
-```
-mo-fmt **/*
-mo-fmt -c **/*
+```sh
+mo-fmt .
+mo-fmt --check .
 ```
 
 ## VS Code support

@@ -14,6 +14,7 @@
     },
     "scripts": {
         "build": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p . && node tools/copy-wasm.mjs",
+        "build:mo-fmt": "node tools/build-mo-fmt.mjs",
         "test": "vitest run",
         "test:watch": "vitest",
         "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.tools.json",
@@ -31,6 +32,7 @@
     },
     "devDependencies": {
         "@types/node": "^22.20.3",
+        "esbuild": "^0.28.2",
         "prettier": "^3.5.3",
         "tree-sitter-motoko": "0.2.1",
         "typescript": "^6.0.3",

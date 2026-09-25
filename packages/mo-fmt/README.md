@@ -1,36 +1,45 @@
-# mo-fmt &middot; [![npm version](https://img.shields.io/npm/v/mo-fmt.svg?logo=npm)](https://www.npmjs.com/package/mo-fmt) [![GitHub license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+# mo-fmt
 
-> #### An easy-to-use Motoko formatter command.
-
----
-
-## Setup
-
-If you have [Node.js](https://nodejs.org/en/download/) installed on your system:
-
-```bash
-npm install -g mo-fmt
-```
-
-This command is also available using [npx](https://docs.npmjs.com/cli/v7/commands/npx), e.g. `npx mo-fmt`.
-
-For environments without Node.js, you can also download a portable executable from the [GitHub releases](https://github.com/dfinity/prettier-plugin-motoko/releases) page.
+A standalone Motoko formatter: the [Prettier](https://prettier.io/) plugin from this repository and Prettier itself, bundled into one file.
 
 ## Usage
 
-```bash
-# Format all Motoko files in-place
-mo-fmt **/*.mo
+```sh
+# Format every .mo file under the current directory, in place
+mo-fmt .
 
-# Format `File.mo` in-place
-mo-fmt File.mo
+# Format some files and directories
+mo-fmt src/main.mo lib/
 
-# Format `File.mo` and all Motoko files in the `lib/` directory
-mo-fmt File.mo lib/*.mo
+# Check without writing: list the files that would change, and exit 1 if any would
+mo-fmt --check .
 
-# Check that all files are formatted
-mo-fmt -c **/*.mo
-
-# Show help information
-mo-fmt
+# Format stdin as the file at the given path (for editors), and print the result
+mo-fmt --stdin-filepath src/main.mo < src/main.mo
 ```
+
+Directories are searched for `.mo` files, skipping `node_modules` and dot-directories such as `.git` and `.mops`. Files matched by `.gitignore` or `.prettierignore` in the current directory are skipped, even when named.
+
+Exit codes: `0` done, `1` `--check` found files that need formatting, `2` a usage error or a file that failed to format.
+
+## Configuration
+
+Each file is formatted with the options Prettier resolves for it from `.prettierrc` and `.editorconfig`, so mo-fmt and Prettier with the plugin format the same file the same way. A `plugins` entry is ignored, since mo-fmt brings its own.
+
+To rewrite legacy syntax to the moc 2.0 forms, set:
+
+```json
+{ "motokoSyntax": "moc2" }
+```
+
+## Building
+
+From the repository root:
+
+```sh
+npm ci
+npm run build:mo-fmt
+node packages/mo-fmt/dist/mo-fmt.cjs --help
+```
+
+`dist/` holds the bundle and the two wasm files it loads from beside itself. mo-fmt has the same version as the plugin.
