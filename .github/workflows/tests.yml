@@ -54,6 +54,10 @@ jobs:
               env:
                   MOTOKO_CORPUS_REQUIRED: 1
             - run: npm run build
+            - run: npm run build:mo-fmt
+            - name: The mo-fmt bundle finds motoko-core formatted
+              working-directory: ../motoko-core
+              run: node "$GITHUB_WORKSPACE/packages/mo-fmt/dist/mo-fmt.cjs" --check .
 
     required:
         name: ci:required

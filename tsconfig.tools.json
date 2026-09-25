@@ -14,5 +14,5 @@
         "skipLibCheck": true,
         "allowImportingTsExtensions": true
     },
-    "include": ["tools", "tests", "vitest.config.ts"]
+    "include": ["tools", "tests", "packages/mo-fmt/src", "vitest.config.ts"]
 }
