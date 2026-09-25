@@ -1,0 +1,10 @@
+type Simple = { x : Nat; y : Text };
+type Method = { f : () -> async Nat };
+type Mutable = { var x : Nat };
+type TypeField = { type U = Nat; x : U };
+type Nested = { inner : { deep : { x : Nat } } };
+type WithParams = { f<A>(a : A) : A };
+type Result = { #ok : Nat; #error : Text };
+type Status = { #Active; #Inactive; #Banned : Text };
+type Arrow = { x : Nat } -> Nat;
+type Wide = { model : Text; plate : Text; isValid : Bool; wasStolen : Bool; expires : Nat };
