@@ -34,7 +34,7 @@
         "prettier": "^3.5.3",
         "tree-sitter-motoko": "0.2.1",
         "typescript": "^6.0.3",
-        "vitest": "^3.2.7"
+        "vitest": "^5.0.1"
     },
     "peerDependencies": {
         "prettier": "^3.0.0"
