@@ -1,16 +1,17 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+import prettier from 'prettier';
 import { describe, expect, test } from 'vitest';
+
+import plugin from '../src/index.ts';
 
 import { MotokoSyntaxError, parse } from '../src/parser/parse.ts';
 import { checkRoundTrip } from '../src/parser/normalize.ts';
 
 const repoRoot = join(import.meta.dirname, '..');
-const roots = [
-    join(repoRoot, '..', 'motoko', 'test'),
-    join(repoRoot, '..', 'motoko-core', 'src'),
-];
+const core = join(repoRoot, '..', 'motoko-core', 'src');
+const roots = [join(repoRoot, '..', 'motoko', 'test'), core];
 
 // Valid Motoko the grammar can't parse: an `@`-privileged name, which only privileged mode accepts.
 const KNOWN_REJECTIONS = new Set(['motoko/test/run-drun/timer.mo']);
@@ -68,4 +69,42 @@ describe.skipIf(files.length === 0)('corpus', () => {
         expect(mismatches, 'the round-trip lost text').toEqual([]);
         expect(rejected.sort()).toEqual([...KNOWN_REJECTIONS].sort());
     });
+
+    test(
+        'every file that parses formats, formatting again changes nothing, and motoko-core, already formatted, is unchanged',
+        { timeout: 300_000 },
+        async () => {
+            const failures: string[] = [];
+            const unstable: string[] = [];
+            const changed: string[] = [];
+            for (const file of files) {
+                const source = readFileSync(file, 'utf8');
+                const options = {
+                    parser: 'motoko',
+                    plugins: [plugin],
+                    filepath: file,
+                };
+                let once: string;
+                try {
+                    once = await prettier.format(source, options);
+                } catch (error) {
+                    if (!(error instanceof MotokoSyntaxError)) {
+                        failures.push(
+                            `${display(file)}: ${(error as Error).message.split('\n')[0]}`,
+                        );
+                    }
+                    continue;
+                }
+                if ((await prettier.format(once, options)) !== once) {
+                    unstable.push(display(file));
+                }
+                if (file.startsWith(core) && once !== source) {
+                    changed.push(display(file));
+                }
+            }
+            expect(failures, 'formatting threw').toEqual([]);
+            expect(unstable, 'a second format changed the output').toEqual([]);
+            expect(changed, 'motoko-core changed').toEqual([]);
+        },
+    );
 });
