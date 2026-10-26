@@ -30,5 +30,5 @@ CI pins both revisions in `.github/workflows/tests.yml` and sets `MOTOKO_CORPUS_
 
 - `lib/` is generated and gitignored.
 - `tree-sitter-motoko` and `web-tree-sitter` are pinned exactly: a grammar minor bump changes tree shapes, and the runtime must load the grammar's ABI. After bumping the grammar, run `npm run gen:node-types`.
-- The grammar is a devDependency only. Its install script builds native bindings, so the build copies its wasm into `lib/` instead of depending on it at runtime.
+- The grammar is a devDependency only. Its install script builds native bindings, so the build copies its wasm into `lib/parser/` instead of depending on it at runtime.
 - `.npmrc` sets `min-release-age=7`, so newly published dependency versions are held back for 7 days.
